@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { isJson, type Json, type JsonCandidate } from "@hena-dev/core";
-import { parseSync } from "oxc-parser";
+import { isJson, isJsonObject, type Json, type JsonCandidate } from "@hena-dev/core";
 
-import { readTypeScriptFiles } from "./files.ts";
+import { isDeclarativeRootBarrel, readTypeScriptFiles } from "./files.ts";
 
 export interface CoverageFileAccess {
   readonly readReport: (path: string) => JsonCandidate;
@@ -15,11 +14,7 @@ export interface CoverageFileAccess {
 
 const packageSourcePattern = /^(packages\/[^/]+)\/src\/.+\.(?:ts|tsx|mts|cts)$/s;
 const testSourcePattern = /\.(?:test|test-d)\.(?:ts|tsx|mts|cts)$/;
-const rootIndexPattern = /^packages\/[^/]+\/src\/index\.(?:ts|tsx|mts|cts)$/u;
 const counterKeyPattern = /^(?:0|[1-9]\d*)$/u;
-
-const isJsonObject = (value: Json | undefined): value is Readonly<Record<string, Json>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const hasSameKeys = (
   left: Readonly<Record<string, Json>>,
@@ -117,17 +112,6 @@ const isBranchMetadata = (
           index === 1 &&
           isImplicitElseLocation(branchLocation)),
     )
-  );
-};
-
-const isDeclarativeRootBarrel = (path: string, content: string): boolean => {
-  if (!rootIndexPattern.test(path)) return false;
-  const result = parseSync(path, content);
-  if (result.errors.length > 0 || result.program.body.length === 0) return false;
-  return result.program.body.every(
-    (statement) =>
-      (statement.type === "ExportAllDeclaration" || statement.type === "ExportNamedDeclaration") &&
-      statement.source !== null,
   );
 };
 

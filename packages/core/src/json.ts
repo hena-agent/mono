@@ -10,6 +10,9 @@ export type JsonCandidate =
   | readonly JsonCandidate[]
   | { readonly [key: string]: JsonCandidate };
 
+export const isJsonObject = (value: Json | undefined): value is Readonly<Record<string, Json>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 const hasJsonPrototype = (value: object): boolean => {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;

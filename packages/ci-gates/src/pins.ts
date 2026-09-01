@@ -1,17 +1,20 @@
-import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { canonicalStringify, isJson, type Json, type JsonCandidate } from "@hena-dev/core";
+import {
+  canonicalStringify,
+  isJson,
+  isJsonObject,
+  type Json,
+  type JsonCandidate,
+} from "@hena-dev/core";
 import { parseDocument } from "yaml";
 
-import { parseGitFileList } from "./files.ts";
-
-const gitExecutable = "/usr/bin/git";
+import { listGitFiles } from "./files.ts";
 
 export interface PinFileAccess {
   readonly listManifestPaths: (cwd: string) => readonly string[];
-  readonly listMutationConfigPaths?: (cwd: string) => readonly string[];
+  readonly listMutationConfigPaths: (cwd: string) => readonly string[];
   readonly listWorkflowPaths: (cwd: string) => readonly string[];
   readonly readText: (path: string) => string;
   readonly vitestConfigPath: string;
@@ -66,9 +69,6 @@ const expectedVitestConfig = `export default {
   },
 };
 `;
-const isJsonObject = (value: Json | undefined): value is Readonly<Record<string, Json>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
 interface WorkflowInvocation {
   readonly action: string;
   readonly hasInputKeyCollision: boolean;
@@ -86,13 +86,31 @@ const normalizeWorkflowInputs = (value: Json | undefined): Omit<WorkflowInvocati
   };
 };
 
-const collectWorkflowInvocations = (value: Json): readonly WorkflowInvocation[] => {
-  if (Array.isArray(value)) return value.flatMap(collectWorkflowInvocations);
+const readWorkflowInvocation = (value: Json): readonly WorkflowInvocation[] => {
   if (!isJsonObject(value)) return [];
   const uses = value["uses"];
-  const own =
-    typeof uses === "string" ? [{ action: uses, ...normalizeWorkflowInputs(value["with"]) }] : [];
-  return [...own, ...Object.values(value).flatMap(collectWorkflowInvocations)];
+  return typeof uses === "string"
+    ? [{ action: uses, ...normalizeWorkflowInputs(value["with"]) }]
+    : [];
+};
+
+const readStepInvocations = (value: Json | undefined): readonly WorkflowInvocation[] =>
+  Array.isArray(value) ? value.flatMap(readWorkflowInvocation) : [];
+
+const collectWorkflowInvocations = (
+  candidate: Readonly<Record<string, Json>>,
+): readonly WorkflowInvocation[] => {
+  const jobs = candidate["jobs"];
+  const jobInvocations = isJsonObject(jobs)
+    ? Object.values(jobs).flatMap((job) =>
+        isJsonObject(job)
+          ? [...readWorkflowInvocation(job), ...readStepInvocations(job["steps"])]
+          : [],
+      )
+    : [];
+  const runs = candidate["runs"];
+  const actionInvocations = isJsonObject(runs) ? readStepInvocations(runs["steps"]) : [];
+  return [...jobInvocations, ...actionInvocations];
 };
 
 const isExactDependency = (value: string): boolean => {
@@ -209,24 +227,12 @@ const livePinFileAccess: PinFileAccess = {
       .filter((entry) => entry.isDirectory())
       .map((entry) => `packages/${entry.name}/stryker.config.json`),
   listWorkflowPaths: (cwd) =>
-    parseGitFileList(
-      execFileSync(
-        gitExecutable,
-        [
-          "ls-files",
-          "-z",
-          "--cached",
-          "--others",
-          "--exclude-standard",
-          "--",
-          ":(glob).github/workflows/**/*.yml",
-          ":(glob).github/workflows/**/*.yaml",
-          ":(glob)**/action.yml",
-          ":(glob)**/action.yaml",
-        ],
-        { cwd, encoding: "utf8" },
-      ),
-    ),
+    listGitFiles(cwd, [
+      ":(glob).github/workflows/**/*.yml",
+      ":(glob).github/workflows/**/*.yaml",
+      ":(glob)**/action.yml",
+      ":(glob)**/action.yaml",
+    ]),
   readText: (path) => readFileSync(path, "utf8"),
   vitestConfigPath: "vitest.config.mjs",
 };
@@ -240,9 +246,11 @@ export const runPinGate = (cwd: string, access: PinFileAccess = livePinFileAcces
   const workflowViolations = access
     .listWorkflowPaths(cwd)
     .flatMap((path) => findWorkflowPinViolations(path, access.readText(resolve(cwd, path))));
-  const mutationConfigViolations = (access.listMutationConfigPaths?.(cwd) ?? []).flatMap((path) =>
-    findMutationConfigPinViolations(path, JSON.parse(access.readText(resolve(cwd, path)))),
-  );
+  const mutationConfigViolations = access
+    .listMutationConfigPaths(cwd)
+    .flatMap((path) =>
+      findMutationConfigPinViolations(path, JSON.parse(access.readText(resolve(cwd, path)))),
+    );
   const vitestConfigViolations =
     access.readText(resolve(cwd, access.vitestConfigPath)) === expectedVitestConfig
       ? []

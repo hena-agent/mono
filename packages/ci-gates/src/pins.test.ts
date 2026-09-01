@@ -30,6 +30,11 @@ const validMutationConfig: MutationConfigFixture = JSON.parse(
   readFileSync(new URL("../stryker.config.json", import.meta.url), "utf8"),
 );
 const validVitestConfig = readFileSync(join(repositoryRoot, "vitest.config.mjs"), "utf8");
+const workflowWithSteps = (steps: string): string =>
+  `jobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n${steps
+    .split("\n")
+    .map((line) => `      ${line}`)
+    .join("\n")}\n`;
 
 describe("findManifestPinViolations", () => {
   it("accepts exact, prerelease, workspace, and npm alias versions", () => {
@@ -137,7 +142,7 @@ describe("findMutationConfigPinViolations", () => {
 
 describe("findWorkflowPinViolations", () => {
   it("accepts commit-pinned and local actions with the pinned Node runtime", () => {
-    const workflow = `steps:\n  - name: Node\n    uses: actions/setup-node@${actionSha} # v5\n    with:\n      node-version: 24.20.0\n      bun-version: latest\n  - uses: oven-sh/setup-bun@${actionSha}\n  - uses: oven-sh/setup-bun@${actionSha}\n    with:\n      bun-version: 1.4.0\n  - uses: ./local-action\njobs:\n  delegated:\n    uses: owner/repo/.github/workflows/check.yml@${actionSha}\n`;
+    const workflow = `${workflowWithSteps(`- name: Node\n  uses: actions/setup-node@${actionSha} # v5\n  with:\n    node-version: 24.20.0\n    bun-version: latest\n- uses: oven-sh/setup-bun@${actionSha}\n- uses: oven-sh/setup-bun@${actionSha}\n  with:\n    bun-version: 1.4.0\n- uses: ./local-action`)}  delegated:\n    uses: owner/repo/.github/workflows/check.yml@${actionSha}\n`;
     expect(findWorkflowPinViolations(".github/workflows/ci.yml", workflow)).toEqual([]);
   });
 
@@ -145,7 +150,9 @@ describe("findWorkflowPinViolations", () => {
     expect(
       findWorkflowPinViolations(
         ".github/workflows/ci.yml",
-        `steps:\n  -   uses:   actions/setup-node@v5\n  - uses: owner/action@${actionSha}suffix\nspoof:\n  node-version: 24.20.0\n`,
+        workflowWithSteps(
+          `-   uses:   actions/setup-node@v5\n- uses: owner/action@${actionSha}suffix\n  with:\n    uses: owner/spoof@v1`,
+        ),
       ),
     ).toEqual([
       {
@@ -164,7 +171,9 @@ describe("findWorkflowPinViolations", () => {
   });
 
   it("rejects every changed runtime and Bun override", () => {
-    const workflow = `steps:\n  - uses: actions/setup-node@${actionSha}\n    with:\n      node-version: 24.20.0\n  - name: Changed Node\n    uses: actions/setup-node@${actionSha}\n    with:\n      node-version: 20.0.0\n  - uses: Actions/setup-node@${actionSha}\n  - uses: OVEN-SH/SETUP-BUN@${actionSha}\n    with:\n      bun-version: latest\n  - uses: oven-sh/setup-bun@${actionSha}\n    with:\n      bun-version-file: .bun-version\n`;
+    const workflow = workflowWithSteps(
+      `- uses: actions/setup-node@${actionSha}\n  with:\n    node-version: 24.20.0\n- name: Changed Node\n  uses: actions/setup-node@${actionSha}\n  with:\n    node-version: 20.0.0\n- uses: Actions/setup-node@${actionSha}\n- uses: OVEN-SH/SETUP-BUN@${actionSha}\n  with:\n    bun-version: latest\n- uses: oven-sh/setup-bun@${actionSha}\n  with:\n    bun-version-file: .bun-version`,
+    );
 
     expect(findWorkflowPinViolations(".github/workflows/ci.yml", workflow)).toEqual([
       {
@@ -187,7 +196,9 @@ describe("findWorkflowPinViolations", () => {
   });
 
   it("normalizes action inputs and rejects case-colliding keys", () => {
-    const workflow = `steps:\n  - uses: actions/setup-node@${actionSha}\n    with:\n      NODE-VERSION: 24.20.0\n  - uses: oven-sh/setup-bun@${actionSha}\n    with:\n      BUN-VERSION: latest\n  - uses: oven-sh/setup-bun@${actionSha}\n    with:\n      BUN-VERSION-FILE: .bun-version\n  - uses: oven-sh/setup-bun@${actionSha}\n    with:\n      bun-version: 1.4.0\n      BUN-VERSION: 1.4.0\n`;
+    const workflow = workflowWithSteps(
+      `- uses: actions/setup-node@${actionSha}\n  with:\n    NODE-VERSION: 24.20.0\n- uses: oven-sh/setup-bun@${actionSha}\n  with:\n    BUN-VERSION: latest\n- uses: oven-sh/setup-bun@${actionSha}\n  with:\n    BUN-VERSION-FILE: .bun-version\n- uses: oven-sh/setup-bun@${actionSha}\n  with:\n    bun-version: 1.4.0\n    BUN-VERSION: 1.4.0`,
+    );
 
     expect(findWorkflowPinViolations(".github/workflows/ci.yml", workflow)).toEqual([
       {
@@ -209,7 +220,7 @@ describe("findWorkflowPinViolations", () => {
     expect(
       findWorkflowPinViolations(
         ".github/workflows/ci.yml",
-        `steps:\n  - uses: actions/checkout@${actionSha}`,
+        workflowWithSteps(`- uses: actions/checkout@${actionSha}`),
       ),
     ).toEqual([]);
     expect(
@@ -232,6 +243,12 @@ describe("findWorkflowPinViolations", () => {
         "runs:\n  using: docker",
       ),
     ).toEqual([]);
+    expect(
+      findWorkflowPinViolations(
+        ".github/workflows/ignored.yml",
+        `${workflowWithSteps("- null")}  ignored: not-a-job\n`,
+      ),
+    ).toEqual([]);
   });
 
   it("rejects malformed or non-object workflow documents", () => {
@@ -246,13 +263,16 @@ describe("findWorkflowPinViolations", () => {
 
 describe("runPinGate", () => {
   const validManifest = JSON.stringify({ packageManager: "bun@1.4.0" });
-  const validWorkflow = `steps:\n  - uses: actions/checkout@${actionSha}\n  - uses: actions/setup-node@${actionSha}\n    with:\n      node-version: 24.20.0`;
+  const validWorkflow = workflowWithSteps(
+    `- uses: actions/checkout@${actionSha}\n- uses: actions/setup-node@${actionSha}\n  with:\n    node-version: 24.20.0`,
+  );
   const access = (
     manifest: string,
     workflow: string,
     vitestConfig = validVitestConfig,
   ): PinFileAccess => ({
     listManifestPaths: () => ["package.json"],
+    listMutationConfigPaths: () => [],
     listWorkflowPaths: () => [".github/workflows/ci.yml"],
     readText: (path) => {
       if (path === "/repo/package.json") return manifest;
@@ -272,7 +292,7 @@ describe("runPinGate", () => {
         "/repo",
         access(
           JSON.stringify({ packageManager: "bun@latest" }),
-          "steps:\n  - uses: actions/checkout@v5",
+          workflowWithSteps("- uses: actions/checkout@v5"),
         ),
       ),
     ).toBe(1);
@@ -332,7 +352,10 @@ describe("runPinGate", () => {
       JSON.stringify({ ...validMutationConfig, coverageAnalysis: "all" }),
     );
     writeFileSync(join(workflowDirectory, "README.md"), "ignored");
-    writeFileSync(join(workflowDirectory, "ci.yml"), "steps:\n  - uses: actions/checkout@v5");
+    writeFileSync(
+      join(workflowDirectory, "ci.yml"),
+      workflowWithSteps("- uses: actions/checkout@v5"),
+    );
     writeFileSync(join(workflowDirectory, "ci.yml.bak"), "- uses: actions/checkout@v5");
     writeFileSync(
       join(actionDirectory, "action.yml"),

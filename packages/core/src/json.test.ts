@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { isJson, type JsonCandidate } from "./json.ts";
+import { isJson, isJsonObject, type JsonCandidate } from "./json.ts";
+
+it("identifies JSON objects without accepting arrays or primitives", () => {
+  expect(isJsonObject({ value: 1 })).toBe(true);
+  expect(isJsonObject([])).toBe(false);
+  expect(isJsonObject(null)).toBe(false);
+  expect(isJsonObject(undefined)).toBe(false);
+});
 
 describe("isJson", () => {
   it.each([

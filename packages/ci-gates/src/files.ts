@@ -2,8 +2,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { parseSync } from "oxc-parser";
+
 const gitExecutable = "/usr/bin/git";
 const generatedTypeScriptPaths = new Set([".opencode/plugin/codex-web-search.ts"]);
+const rootSourceBarrelPattern = /^(?:packages\/[^/]+\/)?src\/index\.(?:ts|tsx|mts|cts)$/u;
 
 export interface SourceFile {
   readonly content: string;
@@ -23,26 +26,36 @@ export interface StaticScopeAccess {
 export const parseGitFileList = (output: string): readonly string[] =>
   output.split("\0").filter((path) => path !== "");
 
-const liveSourceFileAccess: SourceFileAccess = {
+export const listGitFiles = (cwd: string, pathspecs: readonly string[] = []): readonly string[] =>
+  parseGitFileList(
+    execFileSync(
+      gitExecutable,
+      ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...pathspecs],
+      { cwd, encoding: "utf8" },
+    ),
+  );
+
+export const isRootSourceBarrel = (path: string): boolean => rootSourceBarrelPattern.test(path);
+
+export const isDeclarativeRootBarrel = (path: string, content: string): boolean => {
+  if (!isRootSourceBarrel(path)) return false;
+  const result = parseSync(path, content);
+  if (result.errors.length > 0 || result.program.body.length === 0) return false;
+  return result.program.body.every(
+    (statement) =>
+      (statement.type === "ExportAllDeclaration" || statement.type === "ExportNamedDeclaration") &&
+      statement.source !== null,
+  );
+};
+
+export const liveSourceFileAccess: SourceFileAccess = {
   listPaths: (cwd) =>
-    parseGitFileList(
-      execFileSync(
-        gitExecutable,
-        [
-          "ls-files",
-          "-z",
-          "--cached",
-          "--others",
-          "--exclude-standard",
-          "--",
-          ":(glob)**/*.ts",
-          ":(glob)**/*.tsx",
-          ":(glob)**/*.mts",
-          ":(glob)**/*.cts",
-        ],
-        { cwd, encoding: "utf8" },
-      ),
-    ).filter((path) => !generatedTypeScriptPaths.has(path)),
+    listGitFiles(cwd, [
+      ":(glob)**/*.ts",
+      ":(glob)**/*.tsx",
+      ":(glob)**/*.mts",
+      ":(glob)**/*.cts",
+    ]).filter((path) => !generatedTypeScriptPaths.has(path)),
   readText: (path) => readFileSync(path, "utf8"),
 };
 

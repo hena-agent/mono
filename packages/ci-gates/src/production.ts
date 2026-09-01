@@ -1,23 +1,31 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { posix, resolve } from "node:path";
 
-import { parseSync, Visitor, type Program, type VariableDeclarator } from "oxc-parser";
+import {
+  parseSync,
+  Visitor,
+  type MemberExpression,
+  type Program,
+  type VariableDeclarator,
+} from "oxc-parser";
 import { parseConfigFileTextToJson } from "typescript";
 
 import type { JsonCandidate } from "@hena-dev/core";
 
-import { parseGitFileList, readTypeScriptFiles, type SourceFileAccess } from "./files.ts";
-
-const gitExecutable = "/usr/bin/git";
+import {
+  isDeclarativeRootBarrel,
+  isRootSourceBarrel,
+  listGitFiles,
+  liveSourceFileAccess,
+  readTypeScriptFiles,
+  type SourceFileAccess,
+} from "./files.ts";
 
 const packageSourcePattern = /^(packages\/[^/]+\/src)\//u;
 const testSourcePattern = /\.(?:test|test-d)\.(?:ts|tsx|mts|cts)$/u;
 const testReferencePattern = /\.(?:test|test-d)\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u;
-const barrelPathPattern = /\/src\/index\.(?:ts|tsx|mts|cts)$/u;
-const barrelExportPattern = /export\s+(?:type\s+)?(?:\*|\{[^}]*\})\s+from\s+["'][^"']+["'];?/gu;
 const relativePathPattern = /^\.{1,2}(?:\/|$)/u;
 const localExtendsPattern = /^\.{1,2}(?:[\\/]|$)/u;
+const typeScriptConfigPattern = /(?:^|\/)tsconfig[^/]*\.jsonc?$/u;
 const remappingOptions = ["baseUrl", "paths", "rootDirs", "moduleSuffixes"] as const;
 
 export interface ProductionScopeViolation {
@@ -25,15 +33,28 @@ export interface ProductionScopeViolation {
   readonly path: string;
 }
 
+export interface ProductionScopeAccess extends SourceFileAccess {
+  readonly listTypeScriptConfigPaths: (cwd: string) => readonly string[];
+}
+
 const isCandidateObject = (
   value: JsonCandidate,
 ): value is Readonly<Record<string, JsonCandidate>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const hasExternalExtends = (value: JsonCandidate): boolean =>
-  (typeof value === "string" && !localExtendsPattern.test(value)) ||
+const normalizedExtendedConfigPath = (path: string, extended: string): string =>
+  posix.normalize(posix.join(posix.dirname(path), extended.replaceAll("\\", "/")));
+
+const isRepositoryLocalExtends = (path: string, extended: string): boolean => {
+  if (!localExtendsPattern.test(extended)) return false;
+  const normalized = normalizedExtendedConfigPath(path, extended);
+  return normalized !== ".." && !normalized.startsWith("../") && !posix.isAbsolute(normalized);
+};
+
+const hasExternalExtends = (path: string, value: JsonCandidate): boolean =>
+  (typeof value === "string" && !isRepositoryLocalExtends(path, value)) ||
   (Array.isArray(value) &&
-    value.some((entry) => typeof entry === "string" && !localExtendsPattern.test(entry)));
+    value.some((entry) => typeof entry === "string" && !isRepositoryLocalExtends(path, entry)));
 
 const findTypeScriptConfigViolations = (
   path: string,
@@ -55,7 +76,7 @@ const findTypeScriptConfigViolations = (
       path,
     });
   }
-  if (hasExternalExtends(config["extends"])) {
+  if (hasExternalExtends(path, config["extends"])) {
     violations.push({ message: "external TypeScript config extends are not permitted", path });
   }
   return violations;
@@ -74,21 +95,41 @@ const escapesPackageSource = (path: string, sourceRoot: string, specifier: strin
 };
 
 const hasDestructuredProcessBuiltinLoader = (node: VariableDeclarator): boolean => {
-  if (node.init === null || Reflect.get(node.init, "name") !== "process") return false;
+  if (node.init?.type !== "Identifier" || node.init.name !== "process") return false;
   if (node.id.type !== "ObjectPattern") return false;
-  return node.id.properties.some(
-    (property) =>
-      property.type === "Property" &&
-      (Reflect.get(property.key, "name") ?? Reflect.get(property.key, "value")) ===
-        "getBuiltinModule",
-  );
+  return node.id.properties.some((property) => {
+    if (property.type !== "Property") return false;
+    // Stryker disable next-line all: OXC exposes name only on Identifier keys.
+    if (property.key.type === "Identifier") {
+      return property.key.name === "getBuiltinModule";
+    }
+    // Stryker disable next-line all: OXC exposes value only on Literal keys.
+    if (property.key.type === "Literal") {
+      return property.key.value === "getBuiltinModule";
+    }
+    return false;
+  });
+};
+
+const hasBuiltinModuleMemberName = (node: MemberExpression): boolean => {
+  // Stryker disable next-line all: OXC exposes name only on Identifier properties.
+  if (node.property.type === "Identifier") {
+    return node.property.name === "getBuiltinModule";
+  }
+  // Stryker disable next-line all: OXC exposes value only on Literal properties.
+  if (node.property.type === "Literal") {
+    return node.property.value === "getBuiltinModule";
+  }
+  return false;
 };
 
 const countCommonJsLoaders = (program: Program): number => {
   let count = 0;
   new Visitor({
-    Identifier: (node) => {
-      if (node.name === "require") count += 1;
+    CallExpression: (node) => {
+      // Stryker disable next-line all: OXC exposes name only on Identifier callees.
+      if (node.callee.type !== "Identifier") return;
+      if (node.callee.name === "require") count += 1;
     },
     VariableDeclarator: (node) => {
       count += Number(hasDestructuredProcessBuiltinLoader(node));
@@ -97,10 +138,11 @@ const countCommonJsLoaders = (program: Program): number => {
       count += 1;
     },
     MemberExpression: (node) => {
-      const objectName: JsonCandidate = Reflect.get(node.object, "name");
-      const propertyName: JsonCandidate =
-        Reflect.get(node.property, "name") ?? Reflect.get(node.property, "value");
-      if (objectName === "process" && propertyName === "getBuiltinModule") count += 1;
+      // Stryker disable next-line all: OXC exposes name only on Identifier objects.
+      if (node.object.type !== "Identifier") return;
+      if (node.object.name === "process" && hasBuiltinModuleMemberName(node)) {
+        count += 1;
+      }
     },
   }).visit(program);
   return count;
@@ -150,39 +192,64 @@ export const findProductionScopeViolations = (
         path,
       })),
     );
-    if (barrelPathPattern.test(path) && content.replace(barrelExportPattern, "").trim() !== "") {
+    if (isRootSourceBarrel(path) && !isDeclarativeRootBarrel(path, content)) {
       violations.push({ message: "package source barrels may contain only re-exports", path });
     }
     return violations;
   });
 
+const localConfigExtends = (path: string, content: string): readonly string[] => {
+  const parsed = parseConfigFileTextToJson(path, content);
+  const config = parsed.config as Readonly<Record<string, JsonCandidate>>;
+  const extended = config["extends"];
+  if (typeof extended === "string")
+    return isRepositoryLocalExtends(path, extended) ? [extended] : [];
+  return Array.isArray(extended)
+    ? extended.filter(
+        (entry): entry is string =>
+          typeof entry === "string" && isRepositoryLocalExtends(path, entry),
+      )
+    : [];
+};
+
+const resolveExtendedConfigPath = (path: string, extended: string): string => {
+  const normalized = normalizedExtendedConfigPath(path, extended);
+  return /\.jsonc?$/u.test(normalized) ? normalized : `${normalized}.json`;
+};
+
 const readTypeScriptConfigs = (
   cwd: string,
-): readonly { readonly content: string; readonly path: string }[] =>
-  parseGitFileList(
-    execFileSync(
-      gitExecutable,
-      [
-        "ls-files",
-        "-z",
-        "--cached",
-        "--others",
-        "--exclude-standard",
-        "--",
-        ":(glob)**/*.json",
-        ":(glob)**/*.jsonc",
-      ],
-      { cwd, encoding: "utf8" },
-    ),
-  ).map((path) => ({ content: readFileSync(resolve(cwd, path), "utf8"), path }));
+  access: ProductionScopeAccess,
+): readonly { readonly content: string; readonly path: string }[] => {
+  const pending = [...access.listTypeScriptConfigPaths(cwd)];
+  const seen = new Set<string>();
+  const configs: { content: string; path: string }[] = [];
+  while (pending.length > 0) {
+    const path = pending.shift()!;
+    if (seen.has(path)) continue;
+    seen.add(path);
+    const content = access.readText(resolve(cwd, path));
+    configs.push({ content, path });
+    pending.push(
+      ...localConfigExtends(path, content).map((entry) => resolveExtendedConfigPath(path, entry)),
+    );
+  }
+  return configs;
+};
+
+const liveProductionScopeAccess: ProductionScopeAccess = {
+  ...liveSourceFileAccess,
+  listTypeScriptConfigPaths: (cwd) =>
+    listGitFiles(cwd).filter((path) => typeScriptConfigPattern.test(path)),
+};
 
 export const runProductionScopeGate = (
   cwd: string = process.cwd(),
-  access?: SourceFileAccess,
+  access: ProductionScopeAccess = liveProductionScopeAccess,
 ): number => {
   const violations = [
     ...findProductionScopeViolations(readTypeScriptFiles(cwd, access)),
-    ...findTypeScriptRemappingViolations(access === undefined ? readTypeScriptConfigs(cwd) : []),
+    ...findTypeScriptRemappingViolations(readTypeScriptConfigs(cwd, access)),
   ];
   for (const violation of violations) console.error(`${violation.path}: ${violation.message}`);
   return violations.length === 0 ? 0 : 1;

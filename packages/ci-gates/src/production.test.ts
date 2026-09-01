@@ -84,6 +84,17 @@ describe("production scope", () => {
     ).toHaveLength(2);
   });
 
+  it("allows identifiers named require when they are not called", () => {
+    expect(
+      findProductionScopeViolations([
+        {
+          content: 'export const require = "label";\nconst alias = require;',
+          path: "packages/core/src/live.ts",
+        },
+      ]),
+    ).toEqual([]);
+  });
+
   it("rejects normalized static module targets outside the owning package source", () => {
     expect(
       findProductionScopeViolations([
@@ -123,8 +134,13 @@ describe("production scope", () => {
         },
         {
           content:
-            'const text = "process.getBuiltinModule";\nother.getBuiltinModule;\nprocess.other;\nprocess["other"];',
+            'const text = "process.getBuiltinModule";\nother.getBuiltinModule;\nprocess.other;\nprocess["other"];\nprocess[0];\nprocess[getMember()];',
           path: "packages/core/src/allowed.ts",
+        },
+        {
+          content:
+            'const { other } = process;\nconst { ["other"]: alias } = process;\nconst { [getKey()]: computed } = process;',
+          path: "packages/core/src/allowed-properties.ts",
         },
       ]),
     ).toEqual([
@@ -174,8 +190,12 @@ describe("production scope", () => {
       findProductionScopeViolations([
         {
           content:
-            'export { value, type Value } from "./value.ts";\nexport * from "./other.ts";\nexport   type   { Value }   from   "./types.ts"',
+            '// public API\nexport { value, type Value } from "./value.ts";\nexport * from "./other.ts";\nexport * as api from "./api.ts";\nexport   type   { Value }   from   "./types.ts"',
           path: "packages/core/src/index.ts",
+        },
+        {
+          content: "export const nested = 1;",
+          path: "packages/core/src/nested/src/index.ts",
         },
         { content: "export const executable = 1;", path: "packages/core/src/index.ts.ts" },
       ]),
@@ -195,6 +215,7 @@ describe("production scope", () => {
   it("reports violations through the gate", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const access = {
+      listTypeScriptConfigPaths: () => [],
       listPaths: () => ["packages/core/src/index.ts"],
       readText: () => "export const hidden = 1;",
     };
@@ -203,7 +224,12 @@ describe("production scope", () => {
     expect(error).toHaveBeenCalledWith(
       "packages/core/src/index.ts: package source barrels may contain only re-exports",
     );
-    expect(runProductionScopeGate("/repo", { ...access, readText: () => "" })).toBe(0);
+    expect(
+      runProductionScopeGate("/repo", {
+        ...access,
+        readText: () => 'export * from "./value.ts";',
+      }),
+    ).toBe(0);
     error.mockRestore();
   });
 
@@ -326,12 +352,68 @@ describe("production scope", () => {
     ]);
   });
 
+  it("traverses each local extended config once and rejects invalid discovered configs", () => {
+    const contents: Readonly<Record<string, string>> = {
+      "base.json": '{"compilerOptions":{}}',
+      "base.json.extra.json": '{"compilerOptions":{}}',
+      "escape.json": '{"extends":"../../outside"}',
+      "external.json": '{"extends":"external-config"}',
+      "invalid.json": "{",
+      "null.json": "null",
+      "parent.json": '{"extends":".."}',
+      "primitive.json": "[]",
+      "tsconfig.json":
+        '{"extends":["./base","./base.json",null,["./nested"],"external-config",".\\\\windows","./base.json.extra"]}',
+      "windows.json": '{"compilerOptions":{}}',
+    };
+    const reads: string[] = [];
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      expect(
+        runProductionScopeGate("/repo", {
+          listPaths: () => [],
+          listTypeScriptConfigPaths: () => [
+            "tsconfig.json",
+            "escape.json",
+            "external.json",
+            "invalid.json",
+            "null.json",
+            "parent.json",
+            "primitive.json",
+          ],
+          readText: (path) => {
+            const relativePath = path.slice("/repo/".length);
+            reads.push(relativePath);
+            return contents[relativePath] ?? "{}";
+          },
+        }),
+      ).toBe(1);
+      expect(reads).toEqual([
+        "tsconfig.json",
+        "escape.json",
+        "external.json",
+        "invalid.json",
+        "null.json",
+        "parent.json",
+        "primitive.json",
+        "base.json",
+        "windows.json",
+        "base.json.extra.json",
+      ]);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it("discovers TypeScript config remapping through the live adapter", () => {
     const cwd = mkdtempSync(join(tmpdir(), "hena-production-"));
     mkdirSync(join(cwd, "packages", "core", "src"), { recursive: true });
     writeFileSync(join(cwd, "packages", "core", "src", "live.ts"), "export const live = 1;");
     writeFileSync(join(cwd, "compiler-options.jsonc"), '{"compilerOptions":{"paths":{}}}');
     writeFileSync(join(cwd, "tsconfig.json"), '{"extends":"./compiler-options.jsonc"}');
+    writeFileSync(join(cwd, "tsconfig.app.json"), '{"compilerOptions":{"baseUrl":"."}}');
+    writeFileSync(join(cwd, "tsconfig.json.bak"), '{"compilerOptions":{"rootDirs":[]}}');
     execFileSync("git", ["init"], { cwd });
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -340,6 +422,10 @@ describe("production scope", () => {
       expect(error).toHaveBeenCalledWith(
         "compiler-options.jsonc: TypeScript baseUrl/paths/rootDirs/moduleSuffixes remapping is not permitted",
       );
+      expect(error).toHaveBeenCalledWith(
+        "tsconfig.app.json: TypeScript baseUrl/paths/rootDirs/moduleSuffixes remapping is not permitted",
+      );
+      expect(error).toHaveBeenCalledTimes(2);
     } finally {
       error.mockRestore();
       rmSync(cwd, { force: true, recursive: true });

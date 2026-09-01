@@ -4,11 +4,7 @@ export {
   scanComments,
   type CommentViolation,
 } from "./comments.ts";
-export {
-  findMissingCoverageFiles,
-  runCoverageFileGate,
-  type CoverageFileAccess,
-} from "./coverage.ts";
+export { runCoverageFileGate, type CoverageFileAccess } from "./coverage.ts";
 export {
   findExcludedTypeScriptFiles,
   runStaticScopeGate,
@@ -21,11 +17,7 @@ export {
   type MetricsReport,
   type MetricsServices,
 } from "./metrics.ts";
-export {
-  countMutationReportMutants,
-  runMutationReportGate,
-  type MutationReportAccess,
-} from "./mutation.ts";
+export { runMutationReportGate, type MutationReportAccess } from "./mutation.ts";
 export {
   findManifestPinViolations,
   findMutationConfigPinViolations,
@@ -38,6 +30,7 @@ export {
   findProductionScopeViolations,
   findTypeScriptRemappingViolations,
   runProductionScopeGate,
+  type ProductionScopeAccess,
   type ProductionScopeViolation,
 } from "./production.ts";
 export { renderCiSummary, writeCiSummary } from "./summary.ts";

@@ -1,12 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { isJson, type Json, type JsonCandidate } from "@hena-dev/core";
+import { isJson, isJsonObject, type Json, type JsonCandidate } from "@hena-dev/core";
 
-import { parseGitFileList } from "./files.ts";
-
-const gitExecutable = "/usr/bin/git";
+import { listGitFiles } from "./files.ts";
 
 export interface WorkspaceManifest {
   readonly exports: Json | undefined;
@@ -18,8 +15,8 @@ export interface WorkspaceManifest {
 
 export interface WorkspaceManifestAccess {
   readonly listPaths: (cwd: string) => readonly string[];
-  readonly listSymbolicLinkPaths?: (cwd: string) => readonly string[];
-  readonly isTargetValid?: ((manifestPath: string, target: string) => boolean) | undefined;
+  readonly listSymbolicLinkPaths: (cwd: string) => readonly string[];
+  readonly isTargetValid: (manifestPath: string, target: string) => boolean;
   readonly readJson: (path: string) => JsonCandidate;
   readonly readRootJson: (cwd: string) => JsonCandidate;
 }
@@ -42,9 +39,6 @@ const requiredScripts = [
   ["mutation", "stryker run"],
 ] as const;
 
-const isJsonObject = (value: Json | undefined): value is Readonly<Record<string, Json>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
 const isLiveTargetValid = (manifestPath: string, target: string): boolean => {
   let isValid = false;
   try {
@@ -66,13 +60,9 @@ const liveWorkspaceManifestAccess: WorkspaceManifestAccess = {
       .filter((entry) => entry.isDirectory())
       .map((entry) => `packages/${entry.name}/package.json`),
   listSymbolicLinkPaths: (cwd) =>
-    parseGitFileList(
-      execFileSync(
-        gitExecutable,
-        ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "packages"],
-        { cwd, encoding: "utf8" },
-      ),
-    ).filter((path) => lstatSync(resolve(cwd, path)).isSymbolicLink()),
+    listGitFiles(cwd).filter(
+      (path) => path.startsWith("packages/") && lstatSync(resolve(cwd, path)).isSymbolicLink(),
+    ),
   readJson: (path) => JSON.parse(readFileSync(path).toString("utf8")),
   readRootJson: (cwd) => JSON.parse(readFileSync(join(cwd, "package.json")).toString("utf8")),
 };
@@ -81,7 +71,7 @@ const readWorkspaceManifests = (
   cwd: string,
   access: WorkspaceManifestAccess,
 ): readonly WorkspaceManifest[] =>
-  access.listPaths(cwd).map((path) => {
+  [...access.listPaths(cwd)].map((path) => {
     const candidate = access.readJson(resolve(cwd, path));
     if (!isJson(candidate) || !isJsonObject(candidate)) {
       throw new TypeError(`${path}: package manifest must be a JSON object`);
@@ -93,14 +83,10 @@ const readWorkspaceManifests = (
     if (scripts !== undefined && !isJsonObject(scripts)) {
       throw new TypeError(`${path}: scripts must be a JSON object`);
     }
-    const isTargetValid = access.isTargetValid;
     return {
       exports,
       imports,
-      isTargetValid:
-        isTargetValid === undefined
-          ? undefined
-          : (target: string) => isTargetValid(resolve(cwd, path), target),
+      isTargetValid: (target: string) => access.isTargetValid(resolve(cwd, path), target),
       path,
       scripts,
     };
@@ -194,7 +180,7 @@ export const runWorkspaceScriptGate = (
   const layoutViolations = findWorkspaceLayoutViolations(
     rootCandidate,
     manifests,
-    access.listSymbolicLinkPaths?.(cwd) ?? [],
+    access.listSymbolicLinkPaths(cwd),
   );
 
   for (const violation of violations) {

@@ -14,6 +14,9 @@ vi.mock("node:fs", () => ({
 
 import {
   findExcludedTypeScriptFiles,
+  isDeclarativeRootBarrel,
+  isRootSourceBarrel,
+  listGitFiles,
   parseGitFileList,
   readTypeScriptFiles,
   runStaticScopeGate,
@@ -35,6 +38,48 @@ describe("parseGitFileList", () => {
     expect(parseGitFileList("")).toEqual([]);
     expect(parseGitFileList("line\nbreak.ts\0")).toEqual(["line\nbreak.ts"]);
   });
+});
+
+it("discovers requested Git paths", () => {
+  vi.mocked(execFileSync).mockReturnValueOnce("a.json\0b.jsonc\0");
+  expect(listGitFiles("/repo", [":(glob)**/*.json", ":(glob)**/*.jsonc"])).toEqual([
+    "a.json",
+    "b.jsonc",
+  ]);
+  expect(execFileSync).toHaveBeenLastCalledWith(
+    "/usr/bin/git",
+    [
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "--",
+      ":(glob)**/*.json",
+      ":(glob)**/*.jsonc",
+    ],
+    { cwd: "/repo", encoding: "utf8" },
+  );
+  expect(listGitFiles("/repo")).toEqual(["src/live.ts", ".opencode/plugin/codex-web-search.ts"]);
+});
+
+it("classifies only declarative package-root barrels", () => {
+  expect(isRootSourceBarrel("packages/core/src/index.ts")).toBe(true);
+  expect(isRootSourceBarrel("src/index.mts")).toBe(true);
+  expect(isRootSourceBarrel("packages/core/src/nested/src/index.ts")).toBe(false);
+  expect(
+    isDeclarativeRootBarrel(
+      "packages/core/src/index.ts",
+      '// exports\nexport * as api from "./api.ts";\nexport { value } from "./value.ts";',
+    ),
+  ).toBe(true);
+  expect(isDeclarativeRootBarrel("packages/core/src/index.ts", "export const value = 1;")).toBe(
+    false,
+  );
+  expect(isDeclarativeRootBarrel("packages/core/src/index.ts", "export {")).toBe(false);
+  expect(
+    isDeclarativeRootBarrel("packages/core/src/nested/index.ts", 'export * from "./x.ts";'),
+  ).toBe(false);
 });
 
 it("reads listed TypeScript files", () => {

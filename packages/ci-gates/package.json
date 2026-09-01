@@ -16,7 +16,9 @@
   "dependencies": {
     "@hena-dev/core": "workspace:0.0.0",
     "fta-cli": "3.0.1",
+    "oxc-parser": "0.148.0",
     "oxlint-plugin-complexity": "2.1.8",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "yaml": "2.9.0"
   },
   "devDependencies": {

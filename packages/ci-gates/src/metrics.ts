@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 
 import type { JsonCandidate } from "@hena-dev/core";
 import { runFta, type AnalyzedFile } from "fta-cli";
@@ -37,7 +37,8 @@ const analyzeFtaFiles = (files: readonly SourceFile[]): readonly AnalyzedFile[] 
   try {
     writeFileSync(join(directory, "fta.json"), '{"exclude_under":0}\n');
     const stagedFiles = files.map((file, index) => {
-      const name = `${index}${file.path.endsWith(".tsx") ? ".tsx" : ".ts"}`;
+      const name = `${index}${extname(file.path)}`;
+      // Keep empty and declarative files visible to FTA's parser and result reconciliation.
       writeFileSync(join(directory, name), `${file.content}\n;`);
       return { name, path: file.path };
     });

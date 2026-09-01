@@ -259,8 +259,8 @@ describe("runMetricsGate", () => {
       { content: "export const value = 1", path: "config.mts" },
     ];
     vi.mocked(runFta).mockImplementation((path) => {
-      expect(readdirSync(path).sort()).toEqual(["0.tsx", "1.ts", "fta.json"]);
-      return JSON.stringify([ftaFile(2, "1.ts"), ftaFile(1, "0.tsx")]);
+      expect(readdirSync(path).sort()).toEqual(["0.tsx", "1.mts", "fta.json"]);
+      return JSON.stringify([ftaFile(2, "1.mts"), ftaFile(1, "0.tsx")]);
     });
 
     expect(liveMetricsServices.analyzeFta(files).map((file) => file.file_name)).toEqual([

@@ -1,7 +1,7 @@
 # hena mono — Monorepo Tooling & Quality Gates
 
 - **Status**: Implemented and fully verified (local gates and branch protection enabled; protected-branch integration pending)
-- **Date**: 2026-09-01
+- **Date**: 2026-09-02
 - **Repo**: `hena-agent/mono` (initial project-spec commit on `main`; scaffold proposed in this PR)
 - **Companion**: [`extensible-ai-agent.md`](./extensible-ai-agent.md) — this spec concretizes D7/D10/D24 and **amends** it (see §12)
 
@@ -58,13 +58,13 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | G22 | License | MIT |
 | G23 | Slug/doc | This file: `monorepo-quality-gates.md`, mirrors existing spec conventions |
 | G24 | Shared Vitest config | One root `vitest.config.mjs` is consumed per package; package-local copies violated the zero-duplication gate |
-| G25 | Workspace contract | Root workspaces must equal `["packages/*"]`; package symlinks are forbidden; `ci-gates` enumerates every package, requires normalized TS-family, source-only, non-test export/import targets and the exact specified `build`, `typecheck`, `test`, and `mutation` commands before any package gate |
-| G26 | Fail-closed FTA | Git discovery is authoritative; every TS file is staged for FTA with short-file exclusion disabled, and any missing/unexpected result fails the gate |
+| G25 | Workspace contract | Root workspaces must equal `["packages/*"]`; symlinks anywhere under `packages/` are forbidden; `ci-gates` enumerates every package, requires existing, regular, real-path-contained TS-family, source-only, non-test export/import targets and the exact specified `build`, `typecheck`, `test`, and `mutation` commands before any package gate |
+| G26 | Fail-closed FTA | Git discovery is authoritative; every TS file is staged with its original TS-family extension and short-file exclusion disabled, and any missing/unexpected result fails the gate |
 | G27 | Fail-closed coverage | `ci-gates` reconciles every package source against Vitest's JSON report after tests and validates positive statement/function/branch counters, catching omitted files and fabricated empty/zero evidence |
 | G28 | Fail-closed static scope | Uncached Git discovery rejects committed authored TS matched by Git ignore rules or generated directories excluded by static tools; lint/Knip disable ignore files, formatting disables nested configs and uses explicit TS globs, ast-grep includes hidden/dot/generic-ignore/global paths, and jscpd disables gitignore while retaining explicit generated exclusions |
-| G29 | Pinning invariant | `ci-gates` parses workflow and local composite-action YAML; rejects dependency/override/resolution ranges, nonexact Bun/Node versions per action invocation, Bun-version overrides, changed Stryker scope/thresholds, and GitHub Actions not referenced by full commit SHA |
+| G29 | Pinning invariant | `ci-gates` parses workflow and local composite-action YAML; inspects only job steps, reusable-workflow jobs, and composite-action steps; rejects dependency/override/resolution ranges, nonexact Bun/Node versions per action invocation, Bun-version overrides, changed Stryker scope/thresholds, and GitHub Actions not referenced by full commit SHA |
 | G30 | Fail-closed mutation | Stryker selects all package source; package barrels are constrained to re-exports, and a post-gate rejects malformed metadata/mutants/locations, wrong roots, stale source snapshots, unexpected or missing files, surviving outcomes, and empty reports |
-| G31 | Production/test separation | OXC-decoded production imports/exports cannot reference test-suffixed modules, dynamic imports and TS path remapping are forbidden, package exports/import aliases cannot target tests, and source barrels cannot contain executable code |
+| G31 | Production/test separation | OXC-decoded production imports/exports cannot reference test-suffixed modules, called CommonJS loaders and dynamic imports are forbidden, repository-local TypeScript config inheritance is traversed to reject remapping, external config inheritance is forbidden, package exports/import aliases cannot target tests, and AST-confirmed root source barrels cannot contain executable code |
 
 ## 4. Toolchain (exact pins at scaffold time)
 
@@ -191,7 +191,7 @@ Physical lines — blanks and comments count (strictest reading of "LOC per file
 
 ### 7.6 Halstead difficulty — `//#metrics`
 
-`ci-gates` discovers all TS through NUL-delimited `git ls-files --cached --others --exclude-standard`, stages exactly that set under parser-compatible synthetic names, and calls `runFta` with `exclude_under: 0`. It requires a one-to-one result mapping before asserting `halstead.difficulty < 80` per file, so short files, root files, declarations, parser omissions, duplicates, and unexpected results fail closed. fta's built-in `score_cap` gates only the composite FTA score, hence the script.
+`ci-gates` discovers all TS through NUL-delimited `git ls-files --cached --others --exclude-standard`, stages exactly that set under parser-compatible synthetic names that preserve `.ts`/`.tsx`/`.mts`/`.cts`, and calls `runFta` with `exclude_under: 0`. It requires a one-to-one result mapping before asserting `halstead.difficulty < 80` per file, so short files, root files, declarations, parser omissions, duplicates, and unexpected results fail closed. fta's built-in `score_cap` gates only the composite FTA score, hence the script.
 
 ### 7.7 Coverage 100% — per-package `test`
 
@@ -258,11 +258,11 @@ The scanner's own pattern constants are assembled by string concatenation at run
 
 ### 7.15 Exact pins — `//#pins`
 
-`ci-gates` reads the root and every workspace manifest and rejects ranges across dependencies/dev/optional/peer/override/resolution fields. It parses each workflow and local `action.yml`/`action.yaml` as YAML, recursively finds step and reusable-workflow `uses` nodes, requires full 40-hex GitHub Action SHAs, associates every case-insensitive `setup-node` invocation with exact Node `24.20.0`, and rejects nonexact `setup-bun` overrides. It also requires `packageManager: "bun@1.4.0"` and exact full-source Stryker configurations; `bun install --frozen-lockfile` separately proves the committed lock matches the manifests.
+`ci-gates` reads the root and every workspace manifest and rejects ranges across dependencies/dev/optional/peer/override/resolution fields. It parses each workflow and local `action.yml`/`action.yaml` as YAML, reads `uses` only from workflow job steps, reusable-workflow jobs, and composite-action steps, requires full 40-hex GitHub Action SHAs, associates every case-insensitive `setup-node` invocation with exact Node `24.20.0`, and rejects nonexact `setup-bun` overrides. It also requires `packageManager: "bun@1.4.0"` and exact full-source Stryker configurations; `bun install --frozen-lockfile` separately proves the committed lock matches the manifests.
 
 ### 7.16 Production/test separation — `//#production-scope`
 
-`ci-gates` parses production TS-family files with OXC, rejects parse failures, detects decoded/escaped test-suffixed static import/export specifiers, and bans all dynamic imports so constructed test paths cannot evade inspection. TypeScript JSONC is parsed structurally to reject `baseUrl`/`paths` remapping. Workspace exports and package import aliases must normalize to non-test TS-family targets under `src/`, package-directory symlinks are forbidden, and root source barrels permit only re-exports. Coverage and mutation may therefore classify true tests/barrels without allowing executable production to hide in an excluded path.
+`ci-gates` parses production TS-family files with OXC, rejects parse failures, detects decoded/escaped test-suffixed static import/export specifiers, rejects called `require`, TypeScript external-module references, and `process.getBuiltinModule`, and bans all dynamic imports so constructed test paths cannot evade inspection. TypeScript JSONC is parsed structurally across every `tsconfig*.json[c]` and its complete repository-local `extends` chain to reject `baseUrl`/`paths`/`rootDirs`/`moduleSuffixes`; external or repository-escaping inheritance is forbidden. Workspace exports and package import aliases must resolve to existing regular non-test TS-family files under the owning `src/`, all symlinks under `packages/` are forbidden, and shared OXC classification permits only nonempty declarative re-exports in root source barrels. Coverage and mutation therefore use the same barrel boundary without allowing executable production to hide in an excluded path.
 
 ## 8. Task graph
 
@@ -275,7 +275,7 @@ Per-package tasks (turbo-cached, parallel; JIT linkage means no `^build` anywher
 | `test` | `vitest run --coverage` | `//#workspace-scripts`, `^typecheck` | `coverage/**` |
 | `mutation` | `stryker run` | `//#workspace-scripts`, `^typecheck` | `reports/mutation/**` |
 
-Root tasks (`//#…`): repo-wide `typecheck-all`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, and `gate-comments`; narrowly scoped `pins`, `production-scope`, and `workspace-scripts`. Repo-wide tasks include `$TURBO_ROOT$/**` with `.git` and generated trees excluded, while `tsconfig.base.json` and `vitest.config.mjs` are Turbo `globalDependencies`, so package-source and shared-config changes invalidate affected results without Git metadata or output files invalidating the next run. The uncached `static-scope`, `coverage-files`, and `mutation-files` gates inspect current Git state and fresh/restored package reports after Turbo finishes.
+Root tasks (`//#…`): repo-wide `typecheck-all`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, and `gate-comments`; Git-discovery-dependent `pins`, `production-scope`, and `workspace-scripts` are uncached. Package `test` and `mutation` use Turbo's package-local defaults plus dependency-task hashes instead of hashing the whole repository; `tsconfig.base.json` and `vitest.config.mjs` remain `globalDependencies`. The uncached `static-scope`, `coverage-files`, and `mutation-files` gates inspect current Git state and fresh/restored package reports after Turbo finishes.
 
 Umbrellas: `bun run test` runs package tests then `coverage-files`; `bun run mutation` runs package mutation then `mutation-files`; `bun run check` runs all nonmutation gates then uncached `static-scope` and `coverage-files`; `bun run check:full` includes mutation and all three post-gates. `bun run fix` applies the explicit formatter scope then runs `oxlint --fix --no-ignore`.
 
@@ -310,7 +310,7 @@ Real hena §5.2 work, not throwaway:
 - `files.ts` — authoritative TS discovery plus rejection of files in static-tool-excluded generated directories (G28).
 - `mutation.ts` — schema/root/threshold/status/location validation plus nonempty, exact-source mutation-report reconciliation (G30).
 - `pins.ts` — exact dependency/runtime/Stryker pins plus parsed workflow/local-action YAML enforcement (G29).
-- `production.ts` — OXC-decoded production/test separation, dynamic-import/remapping bans, and declarative-barrel enforcement (G31).
+- `production.ts` — OXC-decoded production/test separation, called-loader and dynamic-import bans, repository-local tsconfig inheritance/remapping enforcement, and shared AST barrel classification (G31).
 - `comments.ts` — banned-string scan over `git ls-files` output (§7.13), concatenation-built patterns.
 - `workspaces.ts` — fixes workspace topology to real directories under `packages/*`, requires TS-only non-test exports/import aliases under `src`, requires all four package scripts to match §5, and deliberately imports `core` through its JIT package export (G15/G25).
 - `summary.ts` — CI summary writer (§9.1).
@@ -331,8 +331,8 @@ Applied together with this spec (agreed in grilling Q5):
 3. **Passed**: Effect `4.0.0-rc.112` + `@effect/vitest` rc typecheck and test under TS 7.
 4. **Passed**: `oxlint-plugin-complexity` 2.1.8 loads in oxlint 1.80; combined rule is `complexity/complexity` with independent `cyclomatic`/`cognitive` caps.
 5. **Passed by upstream contract**: setup-bun v2 reads `packageManager` by default; workflows use that behavior.
-6. **Passed**: complete `bun run check:full` succeeds; 167 tests, 100% all four coverage dimensions in each package, every package production source present only in its owning coverage report with authentic counters, all 27 authored TS files present in metrics accounting, mutation 100% (core 147 outcomes; ci-gates 2,009), authentic nonempty reports with exact roots/source snapshots/file sets and valid locations, zero survivors/no-coverage mutants/Stryker-disable directives, zero clones/dead code/banned type tokens/suppressions/static-scope/pin/production-scope violations, and zero lint/format/build/type errors. Current maxima: cognitive 18, cyclomatic/CRAP 19, Halstead difficulty 56.323.
-7. **Verified cache**: warm `check:full` runs restore package test and mutation outputs before fresh successful static-scope and report reconciliation; dry-run inputs include repository package source and both shared configs while excluding `.git` and generated outputs. Package source, Stryker configuration, Vitest configuration, exports, and workflow changes are explicit inputs to the gates that inspect them.
+6. **Passed**: complete `bun run check:full` succeeds; 173 tests, 100% all four coverage dimensions in each package, every package production source present only in its owning coverage report with authentic counters, all 27 authored TS files present in metrics accounting, and mutation 100% (core 159 generated outcomes; ci-gates 2,002 generated outcomes, including 1,974 tested outcomes and 28 ignored mutants on six justified OXC discriminant guards). Reports are authentic and nonempty with exact roots/source snapshots/file sets and valid locations; there are zero survivors/no-coverage mutants, clones, dead code, banned type tokens, unjustified suppressions, static-scope/pin/production-scope violations, or lint/format/build/type errors. Current maxima: cognitive 18, cyclomatic/CRAP 19, Halstead difficulty 56.645.
+7. **Verified cache**: warm `check:full` runs restore package test and mutation outputs before fresh successful static-scope and report reconciliation; package tasks use package-local default inputs plus shared TypeScript/Vitest global dependencies while excluding generated outputs. Git-discovery-dependent pin, production-scope, workspace, and report-reconciliation gates are uncached, preventing stale passes when discovered files, symlinks, workflows, manifests, or inherited configs change.
 8. **Passed remote**: the public repository's `main` branch has strict required checks `checks` + `mutation`, enforced for administrators; force pushes and deletions are disabled. This PR supplies the workflows so both checks run before merge.
 
 ## 14. Risks

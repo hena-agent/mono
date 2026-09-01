@@ -4,6 +4,7 @@
     "**/.stryker-tmp/**",
     "**/coverage/**",
     "**/dist/**",
+    "**/reports/**",
     ".opencode/plugin/codex-web-search.ts"
   ]
 }

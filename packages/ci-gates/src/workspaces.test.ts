@@ -276,7 +276,9 @@ describe("runWorkspaceScriptGate", () => {
     manifest: ReturnType<WorkspaceManifestAccess["readJson"]>,
     root: ReturnType<WorkspaceManifestAccess["readRootJson"]> = rootManifest,
   ): WorkspaceManifestAccess => ({
+    isTargetValid: () => true,
     listPaths: () => ["packages/core/package.json"],
+    listSymbolicLinkPaths: () => [],
     readJson: () => manifest,
     readRootJson: () => root,
   });
@@ -302,6 +304,21 @@ describe("runWorkspaceScriptGate", () => {
     expect(error).toHaveBeenCalledWith(
       'packages/core/package.json: required script "build" must equal "rm -rf dist && tsc -p tsconfig.build.json"',
     );
+    error.mockRestore();
+  });
+
+  it("sorts adapter-provided manifests before reporting violations", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const access: WorkspaceManifestAccess = {
+      isTargetValid: () => true,
+      listPaths: () => ["packages/z/package.json", "packages/a/package.json"],
+      listSymbolicLinkPaths: () => [],
+      readJson: () => ({ exports: sourceExports }),
+      readRootJson: () => rootManifest,
+    };
+
+    expect(runWorkspaceScriptGate("/repo", access)).toBe(1);
+    expect(error.mock.calls[0]?.[0]).toContain("packages/a/package.json");
     error.mockRestore();
   });
 
@@ -395,6 +412,7 @@ describe("runWorkspaceScriptGate", () => {
       join(firstPackage, "src", "public.ts"),
     );
     symlinkSync(firstPackage, join(cwd, "packages", "linked"), "dir");
+    symlinkSync(firstPackage, join(cwd, "linked-root"), "dir");
     execFileSync("/usr/bin/git", ["init", "--quiet"], { cwd });
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

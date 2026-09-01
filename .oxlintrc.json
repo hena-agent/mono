@@ -18,6 +18,7 @@
     "coverage/**",
     "reports/**",
     ".turbo/**",
+    ".stryker-tmp/**",
     ".opencode/plugin/codex-web-search.ts"
   ]
 }

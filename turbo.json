@@ -11,32 +11,10 @@
     },
     "test": {
       "dependsOn": ["//#workspace-scripts", "^typecheck"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/**",
-        "!$TURBO_ROOT$/**/.git/**",
-        "!$TURBO_ROOT$/**/.stryker-tmp/**",
-        "!$TURBO_ROOT$/**/.turbo/**",
-        "!$TURBO_ROOT$/**/coverage/**",
-        "!$TURBO_ROOT$/**/dist/**",
-        "!$TURBO_ROOT$/**/node_modules/**",
-        "!$TURBO_ROOT$/**/reports/**"
-      ],
       "outputs": ["coverage/**"]
     },
     "mutation": {
       "dependsOn": ["//#workspace-scripts", "^typecheck"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/**",
-        "!$TURBO_ROOT$/**/.git/**",
-        "!$TURBO_ROOT$/**/.stryker-tmp/**",
-        "!$TURBO_ROOT$/**/.turbo/**",
-        "!$TURBO_ROOT$/**/coverage/**",
-        "!$TURBO_ROOT$/**/dist/**",
-        "!$TURBO_ROOT$/**/node_modules/**",
-        "!$TURBO_ROOT$/**/reports/**"
-      ],
       "outputs": ["reports/mutation/**"]
     },
     "//#lint": {
@@ -120,19 +98,7 @@
       "outputs": ["reports/metrics.json"]
     },
     "//#pins": {
-      "inputs": [
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/packages/*/package.json",
-        "$TURBO_ROOT$/packages/*/stryker.config.json",
-        "$TURBO_ROOT$/.github/**",
-        "$TURBO_ROOT$/**/action.yml",
-        "$TURBO_ROOT$/**/action.yaml",
-        "$TURBO_ROOT$/packages/ci-gates/src/index.ts",
-        "$TURBO_ROOT$/packages/ci-gates/src/pins.ts",
-        "$TURBO_ROOT$/packages/core/src/index.ts",
-        "$TURBO_ROOT$/packages/core/src/json.ts",
-        "$TURBO_ROOT$/vitest.config.mjs"
-      ]
+      "cache": false
     },
     "//#gate-comments": {
       "inputs": [
@@ -148,13 +114,7 @@
       ]
     },
     "//#production-scope": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/*/src/**",
-        "$TURBO_ROOT$/packages/ci-gates/src/files.ts",
-        "$TURBO_ROOT$/packages/ci-gates/src/index.ts",
-        "$TURBO_ROOT$/packages/ci-gates/src/production.ts"
-      ]
+      "cache": false
     },
     "//#typecheck-all": {
       "inputs": [
@@ -170,15 +130,7 @@
       ]
     },
     "//#workspace-scripts": {
-      "inputs": [
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/packages/*/package.json",
-        "$TURBO_ROOT$/packages/*/src/**",
-        "$TURBO_ROOT$/packages/ci-gates/src/index.ts",
-        "$TURBO_ROOT$/packages/ci-gates/src/workspaces.ts",
-        "$TURBO_ROOT$/packages/core/src/index.ts",
-        "$TURBO_ROOT$/packages/core/src/json.ts"
-      ]
+      "cache": false
     }
   }
 }

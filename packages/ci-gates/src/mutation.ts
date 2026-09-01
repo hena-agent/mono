@@ -1,10 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { isJson, type Json, type JsonCandidate } from "@hena-dev/core";
+import { isJson, isJsonObject, type Json, type JsonCandidate } from "@hena-dev/core";
 
 import { findJustifiedStrykerDisableLines } from "./comments.ts";
-import { readTypeScriptFiles, type SourceFile } from "./files.ts";
+import { isRootSourceBarrel, readTypeScriptFiles, type SourceFile } from "./files.ts";
 
 export interface MutationReportAccess {
   readonly listPackagePaths: (cwd: string) => readonly string[];
@@ -20,7 +20,6 @@ interface MutationReportSummary {
 
 const testSourcePattern = /\.(?:test|test-d)\.(?:ts|tsx|mts|cts)$/u;
 const declarationPattern = /\.d\.(?:ts|mts|cts)$/u;
-const rootBarrelPattern = /^src\/index\.(?:ts|tsx|mts|cts)$/u;
 const recognizedMutators = new Set([
   "ArithmeticOperator",
   "AssignmentOperator",
@@ -42,9 +41,6 @@ const recognizedMutators = new Set([
 ]);
 const strykerFrameworkName = "StrykerJS";
 const strykerFrameworkVersion = "10.0.0";
-
-const isJsonObject = (value: Json | undefined): value is Readonly<Record<string, Json>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isValidThresholds = (value: Json | undefined): boolean =>
   isJsonObject(value) && value["high"] === 100 && value["low"] === 100 && value["break"] === 100;
@@ -254,7 +250,7 @@ export const runMutationReportGate = (
         (source) =>
           !testSourcePattern.test(source.path) &&
           !declarationPattern.test(source.path) &&
-          !rootBarrelPattern.test(source.path),
+          !isRootSourceBarrel(source.path),
       );
     const expectedByPath = new Map(expected.map((source) => [source.path, source.content]));
     const reported = report.fileSources;
