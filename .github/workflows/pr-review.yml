@@ -1,0 +1,50 @@
+name: pr-review
+
+# Runs once when a PR is opened or marked ready for review; adding the
+# `pr-review` label re-runs it on demand.
+on:
+  # Run the workflow and all local reusable actions from the trusted workflow
+  # commit. The pull request checkout is passive review data and never supplies
+  # executable workflow code to jobs that hold reviewer credentials.
+  pull_request_target:
+    types: [opened, ready_for_review, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+# A new review request supersedes an in-flight review for the same PR. Give
+# unrelated label events unique groups so they cannot cancel active reviews.
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}-${{ github.event.action == 'labeled' && github.event.label.name != 'pr-review' && github.run_id || 'active' }}
+  cancel-in-progress: true
+
+jobs:
+  # Automatic triggers skip drafts. The label is a deliberate human request,
+  # so it also works on draft pull requests.
+  resolve:
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'pr-review') ||
+      (github.event.action != 'labeled' && github.event.pull_request.draft == false)
+    uses: ./.github/workflows/_review-model.yml
+
+  review:
+    needs: resolve
+    if: needs.resolve.outputs.enabled == 'true'
+    name: review (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    uses: ./.github/workflows/_opencode.yml
+    with:
+      model: ${{ matrix.model }}
+      variant: ${{ matrix.variant }}
+      app-client-id: ${{ vars.HENA_REVIEWER_CLIENT_ID }}
+      opencode-version: ${{ needs.resolve.outputs.opencode_version }}
+      timeout-minutes: 40
+      command: thermo-nuclear-code-quality-review
+      command-arguments: ${{ github.event.pull_request.number }}
+    secrets:
+      app-private-key: ${{ secrets.HENA_REVIEWER_PRIVATE_KEY }}
+      opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}

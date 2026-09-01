@@ -1,0 +1,151 @@
+name: _review-model
+
+on:
+  workflow_call:
+    outputs:
+      enabled:
+        description: Whether automated review should run
+        value: ${{ jobs.resolve.outputs.enabled }}
+      reason:
+        description: Why automated review is disabled, when applicable
+        value: ${{ jobs.resolve.outputs.reason }}
+      matrix:
+        description: Resolved model matrix for parallel reviews
+        value: ${{ jobs.resolve.outputs.matrix }}
+      opencode_version:
+        description: Requested OpenCode CLI version override, or empty for the action pin
+        value: ${{ jobs.resolve.outputs.opencode_version }}
+
+# This workflow resolves only public configuration names. It does not need
+# repository contents, pull request access, or secrets.
+permissions: {}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.resolve.outputs.enabled }}
+      reason: ${{ steps.resolve.outputs.reason }}
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      opencode_version: ${{ steps.resolve.outputs.opencode_version }}
+    steps:
+      - name: Resolve model configuration
+        id: resolve
+        shell: bash
+        env:
+          RAW_REVIEW_MODELS: ${{ vars.REVIEW_MODELS }}
+          RAW_OPENCODE_VERSION: ${{ vars.REVIEWER_OPENCODE_VERSION }}
+          VARS_JSON: ${{ toJSON(vars) }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+
+          REGISTERED_PROVIDERS='["anthropic","openai","opencode-go","opencode"]'
+          DEFAULT_MODELS='openai/gpt-5.6-sol@high,anthropic/claude-opus-5@max,opencode-go/glm-5.3-flash@max,opencode/muse-spark-1.2-contributor-free@xhigh'
+          MODELS=$(jq -nr --arg value "$RAW_REVIEW_MODELS" '$value | gsub("^\\s+|\\s+$"; "")')
+          OPENCODE_VERSION=$(jq -nr --arg value "$RAW_OPENCODE_VERSION" '$value | gsub("^\\s+|\\s+$"; "")')
+
+          disable() {
+            {
+              echo "enabled=false"
+              echo "reason=$1"
+              echo 'matrix={"include":[]}'
+              echo "opencode_version=$OPENCODE_VERSION"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "### Review model configuration"
+              echo "- Enabled: no"
+              echo "- Reason: \`$1\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          if [ "${MODELS,,}" = "off" ]; then
+            disable "off"
+            exit 0
+          fi
+          if [ -n "$PULL_REQUEST" ]; then
+            if [ -z "$HEAD_REPOSITORY" ] || [ "$HEAD_REPOSITORY" != "$REPOSITORY" ]; then
+              disable "fork"
+              exit 0
+            fi
+            if [ "$PR_AUTHOR" = "dependabot[bot]" ]; then
+              disable "dependabot"
+              exit 0
+            fi
+          fi
+
+          SOURCE="REVIEW_MODELS"
+          if [ -z "$MODELS" ]; then
+            MODELS="$DEFAULT_MODELS"
+            SOURCE="workflow default"
+          fi
+          if [ -n "$OPENCODE_VERSION" ] && ! [[ "$OPENCODE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::REVIEWER_OPENCODE_VERSION must be an exact semantic version such as '1.18.25', got '$OPENCODE_VERSION'."
+            exit 1
+          fi
+          if ! jq -e '.HENA_REVIEWER_CLIENT_ID | type == "string" and length > 0' <<< "$VARS_JSON" >/dev/null; then
+            echo "::error::Repository variable HENA_REVIEWER_CLIENT_ID is empty. Register the reviewer GitHub App before enabling reviews."
+            exit 1
+          fi
+
+          MODEL_LIST=$(jq -nc --arg value "$MODELS" '$value | split(",") | map(gsub("^\\s+|\\s+$"; ""))')
+          if ! jq -e 'length > 0 and all(.[]; length > 0)' <<< "$MODEL_LIST" >/dev/null; then
+            echo "::error::REVIEW_MODELS contains an empty model entry. Use comma-separated provider/model@variant values."
+            exit 1
+          fi
+          MODEL_COUNT=$(jq -r 'length' <<< "$MODEL_LIST")
+          if [ "$MODEL_COUNT" -gt 256 ]; then
+            echo "::error::REVIEW_MODELS contains $MODEL_COUNT entries; GitHub Actions matrices support at most 256 jobs."
+            exit 1
+          fi
+          if ! jq -e 'length == (unique | length)' <<< "$MODEL_LIST" >/dev/null; then
+            echo "::error::REVIEW_MODELS contains duplicate model entries."
+            exit 1
+          fi
+
+          MATRIX='{"include":[]}'
+          while IFS= read -r MODEL_REF; do
+            if ! [[ "$MODEL_REF" =~ ^[a-z0-9][a-z0-9-]*/[A-Za-z0-9._:/-]+@[a-z0-9-]+$ ]]; then
+              echo "::error::REVIEW_MODELS entries must use provider/model@variant form, got '$MODEL_REF'."
+              exit 1
+            fi
+
+            PROVIDER="${MODEL_REF%%/*}"
+            MODEL_AND_VARIANT="${MODEL_REF#*/}"
+            MODEL_ID="${MODEL_AND_VARIANT%@*}"
+            VARIANT="${MODEL_AND_VARIANT##*@}"
+            if ! jq -e --arg provider "$PROVIDER" 'index($provider) != null' <<< "$REGISTERED_PROVIDERS" >/dev/null; then
+              REGISTERED=$(jq -r 'join(", ")' <<< "$REGISTERED_PROVIDERS")
+              echo "::error::REVIEW_MODELS names unregistered provider '$PROVIDER' (registered: $REGISTERED)."
+              exit 1
+            fi
+
+            MODEL="$PROVIDER/$MODEL_ID"
+            MATRIX=$(jq -c \
+              --arg model "$MODEL" \
+              --arg variant "$VARIANT" \
+              --arg label "$MODEL@$VARIANT" \
+              '.include += [{model: $model, variant: $variant, label: $label}]' \
+              <<< "$MATRIX")
+          done < <(jq -r '.[]' <<< "$MODEL_LIST")
+
+          {
+            echo "enabled=true"
+            echo "reason="
+            echo "matrix=$MATRIX"
+            echo "opencode_version=$OPENCODE_VERSION"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Review model configuration"
+            echo "- Enabled: yes"
+            jq -r '.include[].label | "- Model: `\(.)`"' <<< "$MATRIX"
+            echo "- Source: \`$SOURCE\`"
+            if [ -n "$OPENCODE_VERSION" ]; then
+              echo "- OpenCode version override: \`$OPENCODE_VERSION\`"
+            else
+              echo "- OpenCode version override: none (use action pin)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
