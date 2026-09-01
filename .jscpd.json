@@ -1,0 +1,20 @@
+{
+  "threshold": 0,
+  "minTokens": 70,
+  "minLines": 8,
+  "mode": "mild",
+  "formats": ["typescript", "tsx"],
+  "crossFormats": "typescript,tsx",
+  "maxSize": "1gb",
+  "reporters": ["console", "json"],
+  "output": "reports/jscpd",
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/reports/**",
+    "**/.turbo/**",
+    "**/.stryker-tmp/**",
+    ".opencode/plugin/codex-web-search.ts"
+  ]
+}

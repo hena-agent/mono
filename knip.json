@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "ignore": [
+    "**/.stryker-tmp/**",
+    "**/coverage/**",
+    "**/dist/**",
+    ".opencode/plugin/codex-web-search.ts"
+  ]
+}

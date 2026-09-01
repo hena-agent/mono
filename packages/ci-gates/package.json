@@ -1,0 +1,27 @@
+{
+  "name": "@hena-dev/ci-gates",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "vitest run --root . --config ../../vitest.config.mjs --coverage",
+    "mutation": "stryker run"
+  },
+  "dependencies": {
+    "@hena-dev/core": "workspace:0.0.0",
+    "fta-cli": "3.0.1",
+    "oxlint-plugin-complexity": "2.1.8",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "vitest": "4.1.11"
+  }
+}

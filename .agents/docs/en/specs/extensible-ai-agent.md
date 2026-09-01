@@ -351,7 +351,7 @@ Composition: `hena.config.ts` (optional) with `defineConfig({ extensions: [...] 
 
 ## 14. Monorepo
 
-Bun workspaces + Turborepo. ESM-only, `"type": "module"`, subpath export maps, `tsc`-built `dist/` per package. TypeScript strict. Every package: `src/` of tiny single-purpose modules (TanStack AI style), colocated `*.test.ts`.
+Bun workspaces + Turborepo. ESM-only, `"type": "module"`, subpath export maps, `tsc`-built `dist/` per package. TypeScript strict across `.ts`, `.tsx`, `.mts`, and `.cts`. Every package: `src/` of tiny single-purpose modules (TanStack AI style), colocated tests.
 
 ```
 packages/
@@ -369,7 +369,7 @@ packages/
   web/                 # React + Vite UI (builds static assets consumed by server)
   cli/                 # hena binary: serve, init, db; defineConfig; composition root
   testkit/             # in-memory EventStore, scripted LanguageModel, event fixtures, layer helpers
-  ci-gates/            # quality-gate scripts: Halstead gate, banned-comment scan, CI summary (D25)
+  ci-gates/            # metrics/comment/workspace gates + CI summary; imports core as JIT-link fixture (D25)
 ```
 
 Dependency direction: everything depends on `core` (and `testkit` in tests); `core` depends only on `effect`; `cli` is the composition root. Nothing else depends on anything else unless listed.
@@ -380,7 +380,7 @@ Dependency direction: everything depends on `core` (and `testkit` in tests); `co
 
 - **Lint**: oxlint. **Format**: oxfmt. No Biome, no ESLint, no Prettier.
 - **Tests**: Vitest + `@effect/vitest` (`it.effect`, TestClock, scoped layers). Determinism-critical suites: canonical form golden bytes, PromptSpec hash stability, reducer folds, reload state machine, freeze-rule enforcement (interface change mid-session must fail the cache guard).
-- **Turborepo tasks**: `build`, `typecheck`, `test`, `lint`, `fmt` — cached per package. CI: GitHub Actions running the same.
+- **Turborepo tasks**: per-package `build`, `typecheck`, `test`, `mutation`; repo-wide cached lint, format, type-ban, duplication, dead-code, metrics, comment, and workspace-contract tasks. CI runs the same graph.
 - **Quality gates**: the full regime (coverage 100%, mutation score 100, cyclomatic/cognitive < 22, Halstead difficulty < 80, LOC/file < 500, CRAP < 25 derived, knip/jscpd zeros, `any`/`unknown` ban) lives in [`monorepo-quality-gates.md`](./monorepo-quality-gates.md) (D25).
 - **Versioning**: no changesets. Fixed workspace version, manual bumps. `private: true` (publishable-shaped: exports maps, files, licenses) until the extension API survives subagents (v1.5), then public `0.x`.
 
