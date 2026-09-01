@@ -35,7 +35,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | # | Decision | Choice |
 |---|---|---|
 | G1 | Deliverable flow | Spec → user review → scaffold implementation |
-| G2 | TypeScript | **7.0.2 native compiler** for `tsc`; Microsoft's official `@typescript/typescript6` side-by-side alias supplies the legacy API required by Stryker |
+| G2 | TypeScript | **7.0.2 native compiler** for `tsc`; Microsoft's official `@typescript/typescript6` side-by-side alias supplies the legacy API required by Stryker; Bun's hoisted linker makes `typescript` resolve to the compatibility API consistently on macOS and Linux |
 | G3 | Threshold semantics | Strict `<` literally; granularity per §2; static gates on all committed TS |
 | G4 | Coverage layout | Per package, all four metrics 100; every source must appear in `coverage-final.json` with authentic positive counters (empty maps allowed only for declarative root barrels); **coverage-ignore comments forbidden** (grep-gated) |
 | G5 | CRAP | Derived invariant (implied by G4 + G3); no dedicated tool; printed in CI summary |
@@ -96,6 +96,7 @@ Node 24.20.0 is pinned in CI (`actions/setup-node`) because vitest/Stryker bins 
 ```
 package.json              # private, workspaces ["packages/*"], packageManager bun@1.4.0, license MIT
 bun.lock
+bunfig.toml              # hoisted linker keeps TS 6 API resolution deterministic beside native TS 7
 turbo.json
 tsconfig.base.json
 tsconfig.all.json          # strict no-emit pass over every committed TS-family file
@@ -219,7 +220,7 @@ Per-package `stryker.config.json`: vitest runner, exact full-source mutate/inclu
 
 - **Schedule (G9)**: turbo caches `mutation` per package — unchanged packages cost nothing on PRs; changed packages get a full, deterministic run (no incremental-state trust issues). Weekly workflow re-runs everything with `--force` to catch rot (flaky kills, tool drift).
 - **Equivalent mutants (G10)**: mathematically unavoidable. `// Stryker disable next-line all: <reason>` is permitted; the `gate-comments` scan fails any `Stryker disable` lacking a `: reason`, and the CI summary lists every disable with its justification (auditable).
-- **TS 7 compatibility**: Stryker core itself still imports the legacy compiler API to rewrite tsconfig files. The official Microsoft side-by-side setup keeps `tsc` on native TS 7 while aliasing `typescript` to `@typescript/typescript6` for API consumers. No optional Stryker TypeScript checker is enabled.
+- **TS 7 compatibility**: Stryker core itself still imports the legacy compiler API to rewrite tsconfig files. The official Microsoft side-by-side setup keeps `tsc` on native TS 7 while aliasing `typescript` to `@typescript/typescript6` for API consumers. `bunfig.toml` selects the hoisted linker because Bun's isolated Linux layout otherwise resolves Stryker's internal bare import to the native package by real path. No optional Stryker TypeScript checker is enabled.
 
 ### 7.10 Dead code = 0 — `//#knip`
 
@@ -339,7 +340,7 @@ Applied together with this spec (agreed in grilling Q5):
 
 | Risk | Mitigation |
 |---|---|
-| TS 7 has no legacy JS compiler API; Stryker 10 imports it internally | Microsoft-sanctioned side-by-side install: native TS 7 supplies `tsc`; `@typescript/typescript6` supplies API consumers without downgrading builds |
+| TS 7 has no legacy JS compiler API; Stryker 10 imports it internally | Microsoft-sanctioned side-by-side install: native TS 7 supplies `tsc`; `@typescript/typescript6` supplies API consumers without downgrading builds; Bun's hoisted linker prevents platform-dependent bare-import resolution between the two packages |
 | oxfmt 0.65 / oxlint pre-2.0 churn | Exact pins; oxfmt has zero config surface here; both replaceable line items (hena §17 already accepts this) |
 | `oxlint-plugin-complexity` is third-party | Exact pin; fallback: own ~150-line oxlint JS plugin implementing Sonar cognitive complexity |
 | Equivalent mutants wedging CI at score 100 | Justified `Stryker disable` regime with audit trail (G10) |
