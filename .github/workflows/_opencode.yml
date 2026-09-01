@@ -1,0 +1,116 @@
+name: _opencode
+
+# Reusable workflow: run one OpenCode prompt or trusted slash command under a
+# dedicated GitHub App identity.
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: Provider/model id
+        required: true
+        type: string
+      variant:
+        description: Provider-specific model variant
+        required: true
+        type: string
+      app-client-id:
+        description: Client ID of the GitHub App whose identity posts the review
+        required: true
+        type: string
+      prompt:
+        description: Full prompt passed to opencode github run
+        required: false
+        default: ""
+        type: string
+      command:
+        description: Repository-owned command passed to opencode run --command
+        required: false
+        default: ""
+        type: string
+      command-arguments:
+        description: Arguments passed to the slash command
+        required: false
+        default: ""
+        type: string
+      timeout-minutes:
+        description: Hard cap for the job and basis for the credential lease check
+        required: false
+        default: 30
+        type: number
+      opencode-version:
+        description: Optional exact OpenCode CLI version override
+        required: false
+        default: ""
+        type: string
+    secrets:
+      app-private-key:
+        description: Private key of the GitHub App
+        required: true
+      opencode-auth-json:
+        description: Shared CI credential store containing the configured providers
+        required: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Mint publishing app token
+        id: publish-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Mint review app token
+        id: review-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.app-private-key }}
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Checkout workflow workspace
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 1
+          persist-credentials: ${{ inputs.command == '' }}
+          token: ${{ inputs.command != '' && steps.review-token.outputs.token || steps.publish-token.outputs.token }}
+
+      - name: Checkout pull request as review data
+        if: inputs.command != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: .opencode-review-target
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ steps.review-token.outputs.token }}
+
+      - name: Sanitize pull request review data
+        if: inputs.command != ''
+        shell: bash
+        run: bash .github/actions/run-opencode/sanitize-review-checkout.sh .opencode-review-target
+
+      - name: Run ${{ inputs.model }} (${{ inputs.variant }})
+        uses: ./.github/actions/run-opencode
+        with:
+          model: ${{ inputs.model }}
+          variant: ${{ inputs.variant }}
+          opencode-auth-json: ${{ secrets.opencode-auth-json }}
+          github-token: ${{ steps.publish-token.outputs.token }}
+          review-token: ${{ steps.review-token.outputs.token }}
+          prompt: ${{ inputs.prompt }}
+          command: ${{ inputs.command }}
+          command-arguments: ${{ inputs.command-arguments }}
+          review-directory: ${{ inputs.command != '' && '.opencode-review-target' || '' }}
+          timeout-minutes: ${{ inputs.timeout-minutes }}
+          opencode-version: ${{ inputs.opencode-version }}
