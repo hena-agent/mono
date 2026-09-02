@@ -18,12 +18,12 @@
     "fta-cli": "3.0.1",
     "oxc-parser": "0.148.0",
     "oxlint-plugin-complexity": "2.1.8",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript": "catalog:",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@stryker-mutator/vitest-runner": "10.0.0",
-    "@vitest/coverage-v8": "4.1.11",
-    "vitest": "4.1.11"
+    "@vitest/coverage-v8": "catalog:",
+    "vitest": "catalog:"
   }
 }
