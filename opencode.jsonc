@@ -4,4 +4,14 @@
   "plugin": [
     "@henadev/opencode-anthropic-auth@0.1.0",
   ],
+  "lsp": {
+    "typescript": {
+      "command": [
+        "sh",
+        "-c",
+        "exec \"$(bunx @effect/tsgo get-exe-path)\" --lsp --stdio",
+      ],
+      "extensions": [".ts", ".tsx", ".mts", ".cts"],
+    },
+  },
 }
