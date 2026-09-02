@@ -1,0 +1,136 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "globalDependencies": ["tsconfig.base.json", "vitest.config.mjs"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["//#workspace-scripts", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["//#workspace-scripts", "^typecheck"]
+    },
+    "test": {
+      "dependsOn": ["//#workspace-scripts", "^typecheck"],
+      "outputs": ["coverage/**"]
+    },
+    "mutation": {
+      "dependsOn": ["//#workspace-scripts", "^typecheck"],
+      "outputs": ["reports/mutation/**"]
+    },
+    "//#lint": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ]
+    },
+    "//#fmt": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ]
+    },
+    "//#ban-types": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ]
+    },
+    "//#dupes": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ],
+      "outputs": ["reports/jscpd/**"]
+    },
+    "//#knip": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ]
+    },
+    "//#metrics": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ],
+      "outputs": ["reports/metrics.json"]
+    },
+    "//#pins": {
+      "cache": false
+    },
+    "//#gate-comments": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ]
+    },
+    "//#production-scope": {
+      "cache": false
+    },
+    "//#typecheck-all": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/**",
+        "!$TURBO_ROOT$/**/.git/**",
+        "!$TURBO_ROOT$/**/.stryker-tmp/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/coverage/**",
+        "!$TURBO_ROOT$/**/dist/**",
+        "!$TURBO_ROOT$/**/node_modules/**",
+        "!$TURBO_ROOT$/**/reports/**"
+      ]
+    },
+    "//#workspace-scripts": {
+      "cache": false
+    }
+  }
+}

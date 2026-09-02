@@ -1,0 +1,59 @@
+{
+  "name": "hena",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "typecheck-all": "tsc --noEmit -p tsconfig.all.json",
+    "test": "turbo run test && bun run coverage-files",
+    "mutation": "turbo run mutation && bun run mutation-files",
+    "lint": "oxlint --no-ignore -c .oxlintrc.json .",
+    "fmt": "oxfmt --check --disable-nested-config --ignore-path /dev/null '**/*.{ts,tsx,mts,cts}' '!node_modules/**' '!**/dist/**' '!**/coverage/**' '!**/reports/**' '!**/.turbo/**' '!**/.stryker-tmp/**' '!.opencode/plugin/codex-web-search.ts'",
+    "format": "oxfmt --write --disable-nested-config --ignore-path /dev/null '**/*.{ts,tsx,mts,cts}' '!node_modules/**' '!**/dist/**' '!**/coverage/**' '!**/reports/**' '!**/.turbo/**' '!**/.stryker-tmp/**' '!.opencode/plugin/codex-web-search.ts'",
+    "fix": "bun run format && oxlint --fix --no-ignore -c .oxlintrc.json .",
+    "ban-types": "ast-grep scan --config sgconfig.yml --no-ignore hidden --no-ignore dot --no-ignore exclude --no-ignore global --globs '!.opencode/plugin/codex-web-search.ts'",
+    "dupes": "jscpd --config .jscpd.json --no-gitignore .",
+    "knip": "knip --no-gitignore",
+    "pins": "bun -e 'import { runPinGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runPinGate(process.cwd())'",
+    "production-scope": "bun -e 'import { runProductionScopeGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runProductionScopeGate(process.cwd())'",
+    "metrics": "bun -e 'import { runMetricsGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runMetricsGate(process.cwd())'",
+    "mutation-files": "bun -e 'import { runMutationReportGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runMutationReportGate(process.cwd())'",
+    "gate-comments": "bun -e 'import { runCommentGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runCommentGate(process.cwd())'",
+    "static-scope": "bun -e 'import { runStaticScopeGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runStaticScopeGate(process.cwd())'",
+    "coverage-files": "bun -e 'import { runCoverageFileGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runCoverageFileGate(process.cwd())'",
+    "workspace-scripts": "bun -e 'import { runWorkspaceScriptGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runWorkspaceScriptGate(process.cwd())'",
+    "summary": "bun -e 'import { writeCiSummary } from \"./packages/ci-gates/src/index.ts\"; writeCiSummary(process.cwd(), process.env.GITHUB_STEP_SUMMARY)'",
+    "check": "turbo run build typecheck test //#typecheck-all //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts && bun run static-scope && bun run coverage-files",
+    "check:full": "turbo run build typecheck test mutation //#typecheck-all //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts && bun run static-scope && bun run coverage-files && bun run mutation-files",
+    "check:full:force": "turbo run build typecheck test mutation //#typecheck-all //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts --force && bun run static-scope && bun run coverage-files && bun run mutation-files"
+  },
+  "devDependencies": {
+    "@ast-grep/cli": "0.45.3",
+    "@stryker-mutator/core": "10.0.0",
+    "@types/bun": "1.4.0",
+    "@types/node": "24.13.3",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vitest/coverage-v8": "4.1.11",
+    "jscpd": "5.1.1",
+    "knip": "6.34.0",
+    "oxc-parser": "0.148.0",
+    "oxfmt": "0.65.0",
+    "oxlint": "1.80.0",
+    "oxlint-plugin-complexity": "2.1.8",
+    "turbo": "2.10.12",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "bun@1.4.0",
+  "trustedDependencies": [
+    "@ast-grep/cli"
+  ]
+}

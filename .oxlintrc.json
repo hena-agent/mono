@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "plugins": ["typescript"],
+  "jsPlugins": ["oxlint-plugin-complexity"],
+  "rules": {
+    "complexity": ["error", { "max": 21 }],
+    "complexity/complexity": ["error", { "cyclomatic": 21, "cognitive": 21 }],
+    "max-lines": ["error", { "max": 499, "skipBlankLines": false, "skipComments": false }],
+    "typescript/no-explicit-any": "error"
+  },
+  "ignorePatterns": [
+    "node_modules/**",
+    "dist/**",
+    "coverage/**",
+    "reports/**",
+    ".turbo/**",
+    ".stryker-tmp/**",
+    ".opencode/plugin/codex-web-search.ts"
+  ]
+}
