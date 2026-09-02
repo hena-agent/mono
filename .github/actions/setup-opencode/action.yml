@@ -142,7 +142,7 @@ runs:
           echo "::error::OpenCode $OPENCODE_VERSION could not load provider '$PROVIDER'. Verify its credential in OPENCODE_AUTH_JSON."
           exit 1
         fi
-        if ! VARIANTS=$(node "$GITHUB_ACTION_PATH/model-variants.js" "$MODEL" <<< "$MODELS" 2>&1); then
+        if ! VARIANTS=$(bun "$GITHUB_ACTION_PATH/model-variants.ts" "$MODEL" <<< "$MODELS" 2>&1); then
           echo "::error::OpenCode $OPENCODE_VERSION could not resolve '$MODEL': $VARIANTS. Correct the model or set REVIEWER_OPENCODE_VERSION to a release whose catalog contains it."
           exit 1
         fi
