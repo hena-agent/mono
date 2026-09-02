@@ -18,6 +18,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "typecheck-all": "tsc --noEmit -p tsconfig.all.json",
+    "effect-diagnostics": "effect-tsgo diagnostics --project tsconfig.all.json --format text --strict",
     "test": "turbo run test && bun run coverage-files",
     "mutation": "turbo run mutation && bun run mutation-files",
     "lint": "oxlint --no-ignore -c .oxlintrc.json .",
@@ -36,9 +37,9 @@
     "coverage-files": "bun -e 'import { runCoverageFileGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runCoverageFileGate(process.cwd())'",
     "workspace-scripts": "bun -e 'import { runWorkspaceScriptGate } from \"./packages/ci-gates/src/index.ts\"; process.exitCode = runWorkspaceScriptGate(process.cwd())'",
     "summary": "bun -e 'import { writeCiSummary } from \"./packages/ci-gates/src/index.ts\"; writeCiSummary(process.cwd(), process.env.GITHUB_STEP_SUMMARY)'",
-    "check": "turbo run build typecheck test //#typecheck-all //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts && bun run static-scope && bun run coverage-files",
-    "check:full": "turbo run build typecheck test mutation //#typecheck-all //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts && bun run static-scope && bun run coverage-files && bun run mutation-files",
-    "check:full:force": "turbo run build typecheck test mutation //#typecheck-all //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts --force && bun run static-scope && bun run coverage-files && bun run mutation-files"
+    "check": "turbo run build typecheck test //#typecheck-all //#effect-diagnostics //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts && bun run static-scope && bun run coverage-files",
+    "check:full": "turbo run build typecheck test mutation //#typecheck-all //#effect-diagnostics //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts && bun run static-scope && bun run coverage-files && bun run mutation-files",
+    "check:full:force": "turbo run build typecheck test mutation //#typecheck-all //#effect-diagnostics //#lint //#fmt //#ban-types //#dupes //#knip //#metrics //#gate-comments //#pins //#production-scope //#workspace-scripts --force && bun run static-scope && bun run coverage-files && bun run mutation-files"
   },
   "devDependencies": {
     "@ast-grep/cli": "0.45.3",

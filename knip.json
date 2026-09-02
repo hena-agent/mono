@@ -7,5 +7,5 @@
     "**/reports/**",
     ".opencode/plugin/codex-web-search.ts"
   ],
-  "ignoreDependencies": ["@effect/language-service", "@effect/tsgo"]
+  "ignoreDependencies": ["@effect/language-service"]
 }

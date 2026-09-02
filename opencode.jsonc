@@ -12,7 +12,6 @@
         "-c",
         "exec \"$(bunx @effect/tsgo get-exe-path)\" --lsp --stdio",
       ],
-      "extensions": [".ts", ".tsx", ".mts", ".cts"],
     },
   },
 }

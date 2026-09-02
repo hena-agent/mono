@@ -29,6 +29,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | Dead code | 0 | knip exits non-zero on any finding | knip (default mode, repo root) |
 | Redundant code | 0 | zero clones ≥ 70 tokens / 8 lines, cross-package | jscpd, threshold 0 |
 | `any` / `unknown` types | 0 | zero type tokens in all committed TS, no suppressions | ast-grep + oxlint `typescript/no-explicit-any` + TS `strict` |
+| Effect diagnostics | 0 errors/warnings | warnings fail; messages remain advisory | `@effect/tsgo diagnostics` over `tsconfig.all.json` |
 
 ## 3. Decision log
 
@@ -50,7 +51,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | G14 | Pinning | Exact versions everywhere, including immutable GitHub Action SHAs and Node 24.20.0; `packageManager: "bun@1.4.0"` as single bun-version source; Bun's default catalog centralizes Effect, TypeScript, and Vitest versions |
 | G15 | Internal linkage | **JIT source exports** (`exports` → `./src/index.ts`); `ci-gates` imports `core` through its package export as a compile/runtime fixture; `build` (tsc dist emit) is a CI gate, nothing in dev/test depends on dist |
 | G16 | tsconfig | Maximal strictness incl. `isolatedDeclarations` + `erasableSyntaxOnly`; `module: nodenext` + `.ts` specifiers + `rewriteRelativeImportExtensions` |
-| G17 | Gate placement | Per-package: `typecheck`, `build`, `test`, `mutation`. Root turbo tasks: `typecheck-all`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, `gate-comments`, `pins`, `production-scope`, `workspace-scripts`; uncached post-gates: `static-scope`, `coverage-files`, `mutation-files` |
+| G17 | Gate placement | Per-package: `typecheck`, `build`, `test`, `mutation`. Root turbo tasks: `typecheck-all`, `effect-diagnostics`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, `gate-comments`, `pins`, `production-scope`, `workspace-scripts`; uncached post-gates: `static-scope`, `coverage-files`, `mutation-files` |
 | G18 | Lint suppressions | **Total ban** on `oxlint-disable`/`eslint-disable` comments; rules are fixed in config or turned off in config |
 | G19 | Formatting | oxfmt defaults untouched, minimal `.oxfmtrc.json` |
 | G20 | TS suppressions | `@ts-ignore`/`@ts-nocheck` banned everywhere; `@ts-expect-error` banned in `src/`, allowed in `*.test.ts`/`*.test-d.ts` (assertion, not suppression) |
@@ -65,6 +66,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | G29 | Pinning invariant | `ci-gates` parses workflow and local composite-action YAML; inspects only job steps, reusable-workflow jobs, and composite-action steps; rejects dependency/override/resolution ranges, nonexact root catalog definitions, catalog references other than `catalog:`, nonexact Bun/Node versions per action invocation, Bun-version overrides, changed Stryker scope/thresholds, and GitHub Actions not referenced by full commit SHA |
 | G30 | Fail-closed mutation | Stryker selects all package source; package barrels are constrained to re-exports, and a post-gate rejects malformed metadata/mutants/locations, wrong roots, stale source snapshots, unexpected or missing files, surviving outcomes, and empty reports |
 | G31 | Production/test separation | OXC-decoded production imports/exports cannot reference test-suffixed modules, called CommonJS loaders and dynamic imports are forbidden, repository-local TypeScript config inheritance is traversed to reject remapping, external config inheritance is forbidden, package exports/import aliases cannot target tests, and AST-confirmed root source barrels cannot contain executable code |
+| G32 | Effect diagnostics | `@effect/tsgo` resolves the artifact matching installed native TS 7.0.2; OpenCode uses it as the TypeScript LSP and `//#effect-diagnostics` checks all authored TS in CI with warnings fatal |
 
 ## 4. Toolchain (exact pins at scaffold time)
 
@@ -72,6 +74,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 |---|---|---|
 | bun | 1.4.0 (`packageManager`) | package manager + TS runtime |
 | `@typescript/native` (`npm:typescript`) | 7.0.2 | native `tsc` used for typecheck + dist emit |
+| `@effect/tsgo` | 0.39.0 (TS 7.0.2 artifact) | Effect-enhanced TypeScript LSP + strict CI diagnostics |
 | `typescript` (`npm:@typescript/typescript6`) | 6.0.2 wrapper (TS API 6.0.3) | official side-by-side compatibility API required internally by Stryker 10; JSONC parsing for structural tsconfig enforcement |
 | turbo | 2.10.12 | task graph + caching |
 | oxlint | 1.81.0 | lint; cyclomatic (`complexity`), `max-lines`, `typescript/no-explicit-any` |
@@ -100,6 +103,7 @@ bunfig.toml              # hoisted linker keeps TS 6 API resolution deterministi
 turbo.json
 tsconfig.base.json
 tsconfig.all.json          # strict no-emit pass over every committed TS-family file
+opencode.jsonc             # Effect-tsgo replaces OpenCode's built-in TypeScript LSP command
 .oxlintrc.json
 .oxfmtrc.json
 knip.json
@@ -140,10 +144,12 @@ At publish time (far future, per hena D24 `private` until API stabilizes), expor
 
 ```jsonc
 {
+  "$schema": "./node_modules/@effect/tsgo/schema.json",
   "compilerOptions": {
     "target": "esnext",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "jsx": "preserve",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -155,9 +161,11 @@ At publish time (far future, per hena D24 `private` until API stabilizes), expor
     "erasableSyntaxOnly": true,          // no enums/namespaces/param-properties; bun ≡ tsc semantics
     "allowImportingTsExtensions": true,  // relative imports written with .ts
     "rewriteRelativeImportExtensions": true, // emitted dist gets .js
+    "plugins": [{ "name": "@effect/language-service" }],
     "skipLibCheck": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "sourceMap": true
   }
 }
 ```
@@ -224,7 +232,7 @@ Per-package `stryker.config.json`: vitest runner, exact full-source mutate/inclu
 
 ### 7.10 Dead code = 0 — `//#knip`
 
-`knip --no-gitignore` at repo root in default workspace-aware mode (G11), with only generated build/coverage/mutation trees explicitly excluded; package exports and Vitest/Stryker configuration are discovered by Knip's built-in workspace/plugins support. Any finding (unused file, export, type, dependency) exits non-zero.
+`knip --no-gitignore` runs at repo root in default workspace-aware mode (G11), with generated build/coverage/mutation trees explicitly excluded. The sole dependency exception is `@effect/language-service`: `@effect/tsgo` embeds that plugin behind the required tsconfig name, but Knip interprets the name as an unlisted npm dependency. Package exports and Vitest/Stryker configuration are discovered by Knip's built-in workspace/plugins support. Any other finding (unused file, export, type, dependency) exits non-zero.
 
 ### 7.11 Redundant code = 0 — `//#dupes`
 
@@ -265,6 +273,10 @@ The scanner's own pattern constants are assembled by string concatenation at run
 
 `ci-gates` parses production TS-family files with OXC, rejects parse failures, detects decoded/escaped test-suffixed static import/export specifiers, rejects called `require`, TypeScript external-module references, and `process.getBuiltinModule`, and bans all dynamic imports so constructed test paths cannot evade inspection. TypeScript JSONC is parsed structurally across every `tsconfig*.json[c]` and its complete repository-local `extends` chain to reject `baseUrl`/`paths`/`rootDirs`/`moduleSuffixes`; external or repository-escaping inheritance is forbidden. Workspace exports and package import aliases must resolve to existing regular non-test TS-family files under the owning `src/`, all symlinks under `packages/` are forbidden, and shared OXC classification permits only nonempty declarative re-exports in root source barrels. Coverage and mutation therefore use the same barrel boundary without allowing executable production to hide in an excluded path.
 
+### 7.17 Effect diagnostics — `//#effect-diagnostics`
+
+`effect-tsgo diagnostics --project tsconfig.all.json --format text --strict` checks the same repository-wide TS-family scope as `typecheck-all`. The resolver selects the packaged Effect binary whose TypeScript `gitHead` matches installed native TS 7.0.2. Diagnostic errors and warnings fail CI; message-level guidance remains visible without failing. The same plugin configuration powers OpenCode diagnostics and refactors.
+
 ## 8. Task graph
 
 Per-package tasks (turbo-cached, parallel; JIT linkage means no `^build` anywhere in the dev path):
@@ -276,7 +288,7 @@ Per-package tasks (turbo-cached, parallel; JIT linkage means no `^build` anywher
 | `test` | `vitest run --coverage` | `//#workspace-scripts`, `^typecheck` | `coverage/**` |
 | `mutation` | `stryker run` | `//#workspace-scripts`, `^typecheck` | `reports/mutation/**` |
 
-Root tasks (`//#…`): repo-wide `typecheck-all`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, and `gate-comments`; Git-discovery-dependent `pins`, `production-scope`, and `workspace-scripts` are uncached. Package `test` and `mutation` use Turbo's package-local defaults plus dependency-task hashes instead of hashing the whole repository; `tsconfig.base.json` and `vitest.config.mjs` remain `globalDependencies`. The uncached `static-scope`, `coverage-files`, and `mutation-files` gates inspect current Git state and fresh/restored package reports after Turbo finishes.
+Root tasks (`//#…`): repo-wide `typecheck-all`, `effect-diagnostics`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, and `gate-comments`; `effect-diagnostics`, `pins`, `production-scope`, and `workspace-scripts` are uncached. Package `test` and `mutation` use Turbo's package-local defaults plus dependency-task hashes instead of hashing the whole repository; `tsconfig.base.json` and `vitest.config.mjs` remain `globalDependencies`. The uncached `static-scope`, `coverage-files`, and `mutation-files` gates inspect current Git state and fresh/restored package reports after Turbo finishes.
 
 Umbrellas: `bun run test` runs package tests then `coverage-files`; `bun run mutation` runs package mutation then `mutation-files`; `bun run check` runs all nonmutation gates then uncached `static-scope` and `coverage-files`; `bun run check:full` includes mutation and all three post-gates. `bun run fix` applies the explicit formatter scope then runs `oxlint --fix --no-ignore`.
 
@@ -285,7 +297,7 @@ Umbrellas: `bun run test` runs package tests then `coverage-files`; `bun run mut
 ### 9.1 `ci.yml`
 
 - **Triggers**: `pull_request`, `push` to `main`; `concurrency` with cancel-in-progress per ref. No merge queue (solo-dev).
-- **Job `checks`** (ubuntu-latest): immutable-SHA checkout → setup-bun (`packageManager` supplies Bun 1.4.0) → setup-node (Node 24.20.0) → `bun install --frozen-lockfile` → immutable-SHA `actions/cache` on `.turbo` (branch-scoped key: ref + lockfile + commit) → all non-mutation tasks → `ci-gates summary` writes `$GITHUB_STEP_SUMMARY` (max Halstead difficulty, max CC + CRAP derivation, Stryker-disable audit list, clone/dead-code zeros).
+- **Job `checks`** (ubuntu-latest): immutable-SHA checkout → setup-bun (`packageManager` supplies Bun 1.4.0) → setup-node (Node 24.20.0) → `bun install --frozen-lockfile` → immutable-SHA `actions/cache` on `.turbo` (branch-scoped key: ref + lockfile + commit) → all non-mutation tasks, including strict Effect diagnostics → `ci-gates summary` writes `$GITHUB_STEP_SUMMARY` (max Halstead difficulty, max CC + CRAP derivation, Stryker-disable audit list, clone/dead-code zeros).
 - **Job `mutation`** (parallel, same setup): `bun run mutation`, including report validation/source reconciliation.
 - Both jobs are **strict required status checks** on `main`, enforced for administrators by branch protection.
 
@@ -330,9 +342,9 @@ Applied together with this spec (agreed in grilling Q5):
 1. **Passed**: bun workspaces initialized; dependencies installed with `bun i` from current compatible tags (Node types match the pinned Node 24 runtime), saved exactly; text `bun.lock` committed-ready.
 2. **Passed**: native TS 7.0.2 accepts §6, emits both packages, and resolves JIT `.ts` exports under `nodenext`.
 3. **Passed**: Effect `4.0.0-rc.112` + `@effect/vitest` rc typecheck and test under TS 7.
-4. **Passed**: `oxlint-plugin-complexity` 2.1.8 loads in oxlint 1.80; combined rule is `complexity/complexity` with independent `cyclomatic`/`cognitive` caps.
+4. **Passed**: `oxlint-plugin-complexity` 2.1.8 loads in oxlint 1.81; combined rule is `complexity/complexity` with independent `cyclomatic`/`cognitive` caps.
 5. **Passed by upstream contract**: setup-bun v2 reads `packageManager` by default; workflows use that behavior.
-6. **Passed**: complete `bun run check:full` succeeds; 173 tests, 100% all four coverage dimensions in each package, every package production source present only in its owning coverage report with authentic counters, all 27 authored TS files present in metrics accounting, and mutation 100% (core 159 generated outcomes; ci-gates 2,037 generated outcomes, including 2,009 tested outcomes and 28 ignored mutants on six justified OXC discriminant guards). Reports are authentic and nonempty with exact roots/source snapshots/file sets and valid locations; there are zero survivors/no-coverage mutants, clones, dead code, banned type tokens, unjustified suppressions, static-scope/pin/production-scope violations, or lint/format/build/type errors. Current maxima: cognitive 18, cyclomatic/CRAP 19, Halstead difficulty 56.645.
+6. **Passed**: complete `bun run check:full` succeeds; 173 tests, 100% all four coverage dimensions in each package, every package production source present only in its owning coverage report with authentic counters, all 27 authored TS files present in metrics and Effect diagnostic accounting, and mutation 100% (core 159 generated outcomes; ci-gates 2,037 generated outcomes, including 2,009 tested outcomes and 28 ignored mutants on six justified OXC discriminant guards). Reports are authentic and nonempty with exact roots/source snapshots/file sets and valid locations; there are zero Effect diagnostic errors/warnings/messages, survivors/no-coverage mutants, clones, dead code, banned type tokens, unjustified suppressions, static-scope/pin/production-scope violations, or lint/format/build/type errors. Current maxima: cognitive 18, cyclomatic/CRAP 19, Halstead difficulty 56.645.
 7. **Verified cache**: warm `check:full` runs restore package test and mutation outputs before fresh successful static-scope and report reconciliation; package tasks use package-local default inputs plus shared TypeScript/Vitest global dependencies while excluding generated outputs. Git-discovery-dependent pin, production-scope, workspace, and report-reconciliation gates are uncached, preventing stale passes when discovered files, symlinks, workflows, manifests, or inherited configs change.
 8. **Passed remote**: the public repository's `main` branch has strict required checks `checks` + `mutation`, enforced for administrators; force pushes and deletions are disabled. This PR supplies the workflows so both checks run before merge.
 
@@ -341,7 +353,7 @@ Applied together with this spec (agreed in grilling Q5):
 | Risk | Mitigation |
 |---|---|
 | TS 7 has no legacy JS compiler API; Stryker 10 imports it internally | Microsoft-sanctioned side-by-side install: native TS 7 supplies `tsc`; `@typescript/typescript6` supplies API consumers without downgrading builds; Bun's hoisted linker prevents platform-dependent bare-import resolution between the two packages |
-| oxfmt 0.65 / oxlint pre-2.0 churn | Exact pins; oxfmt has zero config surface here; both replaceable line items (hena §17 already accepts this) |
+| oxfmt 0.66 / oxlint pre-2.0 churn | Exact pins; oxfmt has zero config surface here; both replaceable line items (hena §17 already accepts this) |
 | `oxlint-plugin-complexity` is third-party | Exact pin; fallback: own ~150-line oxlint JS plugin implementing Sonar cognitive complexity |
 | Equivalent mutants wedging CI at score 100 | Justified `Stryker disable` regime with audit trail (G10) |
 | Optional Stryker TS checker is disabled | The mandatory TS 7 typecheck remains a separate gate; invalid mutants die during Vitest transformation/runtime, while the TS 6 bridge lets Stryker perform its required config preprocessing |
