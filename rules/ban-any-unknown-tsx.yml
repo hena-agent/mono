@@ -1,0 +1,9 @@
+id: ban-any-unknown-tsx
+message: Type annotations must not use any or unknown
+severity: error
+language: Tsx
+files:
+  - "**/*.tsx"
+rule:
+  kind: predefined_type
+  regex: ^(any|unknown)$

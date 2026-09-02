@@ -1,0 +1,11 @@
+id: ban-any-unknown
+message: Type annotations must not use any or unknown
+severity: error
+language: TypeScript
+files:
+  - "**/*.ts"
+  - "**/*.mts"
+  - "**/*.cts"
+rule:
+  kind: predefined_type
+  regex: ^(any|unknown)$
