@@ -41,14 +41,22 @@ describe("findManifestPinViolations", () => {
     expect(
       findManifestPinViolations("package.json", {
         packageManager: "bun@1.4.0",
-        catalog: { catalog: "1.2.3" },
+        catalog: {
+          alias: "npm:@typescript/typescript6@6.0.2",
+          effect: "4.0.0-rc.112",
+        },
         dependencies: {
           alias: "npm:@scope/package@6.0.2",
-          catalog: "catalog:",
+          effect: "catalog:",
           release: "12.34.56+build.12",
           prerelease: "4.0.0-rc.112",
           workspace: "workspace:0.0.0",
         },
+      }),
+    ).toEqual([]);
+    expect(
+      findManifestPinViolations("packages/core/package.json", {
+        catalog: { ignoredOutsideRoot: "catalog:" },
       }),
     ).toEqual([]);
   });
@@ -62,6 +70,7 @@ describe("findManifestPinViolations", () => {
           fakePackage: "other@1.2.3",
           invalidBuild: "1.2.3+!",
           malformedAlias: "npm:@1.2.3",
+          namedCatalog: "catalog:stable",
           nonString: false,
           suffix: "1.2.3garbage",
         },
@@ -70,7 +79,7 @@ describe("findManifestPinViolations", () => {
         overrides: { fifth: "latest" },
         peerDependencies: { fourth: "npm:package@>=3.0.0" },
         resolutions: { sixth: "^6.0.0" },
-        catalog: { seventh: "^7.0.0" },
+        catalog: { nonString: false, range: "^7.0.0", reference: "catalog:" },
       }),
     ).toEqual([
       { message: "packageManager must equal bun@1.4.0", path: "package.json" },
@@ -78,6 +87,7 @@ describe("findManifestPinViolations", () => {
       { message: "dependencies.fakePackage must use an exact version", path: "package.json" },
       { message: "dependencies.invalidBuild must use an exact version", path: "package.json" },
       { message: "dependencies.malformedAlias must use an exact version", path: "package.json" },
+      { message: "dependencies.namedCatalog must use an exact version", path: "package.json" },
       { message: "dependencies.nonString must use an exact version", path: "package.json" },
       { message: "dependencies.suffix must use an exact version", path: "package.json" },
       { message: "devDependencies.second must use an exact version", path: "package.json" },
@@ -85,7 +95,9 @@ describe("findManifestPinViolations", () => {
       { message: "peerDependencies.fourth must use an exact version", path: "package.json" },
       { message: "overrides.fifth must use an exact version", path: "package.json" },
       { message: "resolutions.sixth must use an exact version", path: "package.json" },
-      { message: "catalog.seventh must use an exact version", path: "package.json" },
+      { message: "catalog.nonString must use an exact version", path: "package.json" },
+      { message: "catalog.range must use an exact version", path: "package.json" },
+      { message: "catalog.reference must use an exact version", path: "package.json" },
     ]);
   });
 
@@ -105,6 +117,12 @@ describe("findManifestPinViolations", () => {
         dependencies: [],
       }),
     ).toThrow("package.json: dependencies must be a JSON object");
+    expect(() =>
+      findManifestPinViolations("package.json", {
+        packageManager: "bun@1.4.0",
+        catalog: [],
+      }),
+    ).toThrow("package.json: catalog must be a JSON object");
   });
 });
 

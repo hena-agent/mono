@@ -47,7 +47,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | G11 | knip mode | Default mode (test usage counts as used) at repo root; revisit production mode when `testkit` exists |
 | G12 | CI shape | Two jobs (`checks`, `mutation`) on `pull_request` + `push` to `main`; concurrency cancel-in-progress; no merge queue; `actions/cache` for `.turbo`; `ubuntu-latest` |
 | G13 | Seed package | `packages/core` with `json.ts` + `canonical.ts` + `hash.ts` and full tests — real hena §5.2 work, exercises every gate from commit 1 |
-| G14 | Pinning | Exact versions everywhere, including immutable GitHub Action SHAs and Node 24.20.0; `packageManager: "bun@1.4.0"` as single bun-version source |
+| G14 | Pinning | Exact versions everywhere, including immutable GitHub Action SHAs and Node 24.20.0; `packageManager: "bun@1.4.0"` as single bun-version source; Bun's default catalog centralizes Effect, TypeScript, and Vitest versions |
 | G15 | Internal linkage | **JIT source exports** (`exports` → `./src/index.ts`); `ci-gates` imports `core` through its package export as a compile/runtime fixture; `build` (tsc dist emit) is a CI gate, nothing in dev/test depends on dist |
 | G16 | tsconfig | Maximal strictness incl. `isolatedDeclarations` + `erasableSyntaxOnly`; `module: nodenext` + `.ts` specifiers + `rewriteRelativeImportExtensions` |
 | G17 | Gate placement | Per-package: `typecheck`, `build`, `test`, `mutation`. Root turbo tasks: `typecheck-all`, `lint`, `fmt`, `ban-types`, `dupes`, `knip`, `metrics`, `gate-comments`, `pins`, `production-scope`, `workspace-scripts`; uncached post-gates: `static-scope`, `coverage-files`, `mutation-files` |
@@ -62,7 +62,7 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | G26 | Fail-closed FTA | Git discovery is authoritative; every TS file is staged with its original TS-family extension and short-file exclusion disabled, and any missing/unexpected result fails the gate |
 | G27 | Fail-closed coverage | `ci-gates` reconciles every package source against Vitest's JSON report after tests and validates positive statement/function/branch counters, catching omitted files and fabricated empty/zero evidence |
 | G28 | Fail-closed static scope | Uncached Git discovery rejects committed authored TS matched by Git ignore rules or generated directories excluded by static tools; lint/Knip disable ignore files, formatting disables nested configs and uses explicit TS globs, ast-grep includes hidden/dot/generic-ignore/global paths, and jscpd disables gitignore while retaining explicit generated exclusions |
-| G29 | Pinning invariant | `ci-gates` parses workflow and local composite-action YAML; inspects only job steps, reusable-workflow jobs, and composite-action steps; rejects dependency/override/resolution ranges, nonexact Bun/Node versions per action invocation, Bun-version overrides, changed Stryker scope/thresholds, and GitHub Actions not referenced by full commit SHA |
+| G29 | Pinning invariant | `ci-gates` parses workflow and local composite-action YAML; inspects only job steps, reusable-workflow jobs, and composite-action steps; rejects dependency/override/resolution ranges, nonexact root catalog definitions, catalog references other than `catalog:`, nonexact Bun/Node versions per action invocation, Bun-version overrides, changed Stryker scope/thresholds, and GitHub Actions not referenced by full commit SHA |
 | G30 | Fail-closed mutation | Stryker selects all package source; package barrels are constrained to re-exports, and a post-gate rejects malformed metadata/mutants/locations, wrong roots, stale source snapshots, unexpected or missing files, surviving outcomes, and empty reports |
 | G31 | Production/test separation | OXC-decoded production imports/exports cannot reference test-suffixed modules, called CommonJS loaders and dynamic imports are forbidden, repository-local TypeScript config inheritance is traversed to reject remapping, external config inheritance is forbidden, package exports/import aliases cannot target tests, and AST-confirmed root source barrels cannot contain executable code |
 
@@ -74,9 +74,9 @@ This spec defines the monorepo scaffold (bun + TypeScript + Turborepo, all packa
 | `@typescript/native` (`npm:typescript`) | 7.0.2 | native `tsc` used for typecheck + dist emit |
 | `typescript` (`npm:@typescript/typescript6`) | 6.0.2 wrapper (TS API 6.0.3) | official side-by-side compatibility API required internally by Stryker 10; JSONC parsing for structural tsconfig enforcement |
 | turbo | 2.10.12 | task graph + caching |
-| oxlint | 1.80.0 | lint; cyclomatic (`complexity`), `max-lines`, `typescript/no-explicit-any` |
+| oxlint | 1.81.0 | lint; cyclomatic (`complexity`), `max-lines`, `typescript/no-explicit-any` |
 | oxlint-plugin-complexity | 2.1.8 | cognitive complexity (oxlint JS plugin; peer: `oxc-parser`) |
-| oxfmt | 0.65.0 | formatting (`--check` in CI) |
+| oxfmt | 0.66.0 | formatting (`--check` in CI) |
 | vitest | 4.1.11 | test runner + v8 coverage |
 | @effect/vitest | 4.0.0-rc.112 | `it.effect`, TestClock etc. (peers: `vitest >=4.1 <5`, `effect ^4.0.0-rc.112`) |
 | effect | 4.0.0-rc.112 | per hena D7 |
@@ -94,7 +94,7 @@ Node 24.20.0 is pinned in CI (`actions/setup-node`) because vitest/Stryker bins 
 ## 5. Repository layout
 
 ```
-package.json              # private, workspaces ["packages/*"], packageManager bun@1.4.0, license MIT
+package.json              # private, workspaces ["packages/*"], default dependency catalog, packageManager bun@1.4.0, license MIT
 bun.lock
 bunfig.toml              # hoisted linker keeps TS 6 API resolution deterministic beside native TS 7
 turbo.json
@@ -259,7 +259,7 @@ The scanner's own pattern constants are assembled by string concatenation at run
 
 ### 7.15 Exact pins — `//#pins`
 
-`ci-gates` reads the root and every workspace manifest and rejects ranges across dependencies/dev/optional/peer/override/resolution fields. It parses each workflow and local `action.yml`/`action.yaml` as YAML, reads `uses` only from workflow job steps, reusable-workflow jobs, and composite-action steps, requires full 40-hex GitHub Action SHAs, associates every case-insensitive `setup-node` invocation with exact Node `24.20.0`, and rejects nonexact `setup-bun` overrides. It also requires `packageManager: "bun@1.4.0"` and exact full-source Stryker configurations; `bun install --frozen-lockfile` separately proves the committed lock matches the manifests.
+`ci-gates` reads the root and every workspace manifest and rejects ranges across dependencies/dev/optional/peer/override/resolution fields. Bare `catalog:` references are accepted in those fields; root catalog definitions must be exact versions or exact `npm:` aliases, while named catalogs are intentionally unsupported. It parses each workflow and local `action.yml`/`action.yaml` as YAML, reads `uses` only from workflow job steps, reusable-workflow jobs, and composite-action steps, requires full 40-hex GitHub Action SHAs, associates every case-insensitive `setup-node` invocation with exact Node `24.20.0`, and rejects nonexact `setup-bun` overrides. It also requires `packageManager: "bun@1.4.0"` and exact full-source Stryker configurations; `bun install --frozen-lockfile` separately proves the committed lock matches the manifests.
 
 ### 7.16 Production/test separation — `//#production-scope`
 
@@ -332,7 +332,7 @@ Applied together with this spec (agreed in grilling Q5):
 3. **Passed**: Effect `4.0.0-rc.112` + `@effect/vitest` rc typecheck and test under TS 7.
 4. **Passed**: `oxlint-plugin-complexity` 2.1.8 loads in oxlint 1.80; combined rule is `complexity/complexity` with independent `cyclomatic`/`cognitive` caps.
 5. **Passed by upstream contract**: setup-bun v2 reads `packageManager` by default; workflows use that behavior.
-6. **Passed**: complete `bun run check:full` succeeds; 173 tests, 100% all four coverage dimensions in each package, every package production source present only in its owning coverage report with authentic counters, all 27 authored TS files present in metrics accounting, and mutation 100% (core 159 generated outcomes; ci-gates 2,002 generated outcomes, including 1,974 tested outcomes and 28 ignored mutants on six justified OXC discriminant guards). Reports are authentic and nonempty with exact roots/source snapshots/file sets and valid locations; there are zero survivors/no-coverage mutants, clones, dead code, banned type tokens, unjustified suppressions, static-scope/pin/production-scope violations, or lint/format/build/type errors. Current maxima: cognitive 18, cyclomatic/CRAP 19, Halstead difficulty 56.645.
+6. **Passed**: complete `bun run check:full` succeeds; 173 tests, 100% all four coverage dimensions in each package, every package production source present only in its owning coverage report with authentic counters, all 27 authored TS files present in metrics accounting, and mutation 100% (core 159 generated outcomes; ci-gates 2,037 generated outcomes, including 2,009 tested outcomes and 28 ignored mutants on six justified OXC discriminant guards). Reports are authentic and nonempty with exact roots/source snapshots/file sets and valid locations; there are zero survivors/no-coverage mutants, clones, dead code, banned type tokens, unjustified suppressions, static-scope/pin/production-scope violations, or lint/format/build/type errors. Current maxima: cognitive 18, cyclomatic/CRAP 19, Halstead difficulty 56.645.
 7. **Verified cache**: warm `check:full` runs restore package test and mutation outputs before fresh successful static-scope and report reconciliation; package tasks use package-local default inputs plus shared TypeScript/Vitest global dependencies while excluding generated outputs. Git-discovery-dependent pin, production-scope, workspace, and report-reconciliation gates are uncached, preventing stale passes when discovered files, symlinks, workflows, manifests, or inherited configs change.
 8. **Passed remote**: the public repository's `main` branch has strict required checks `checks` + `mutation`, enforced for administrators; force pushes and deletions are disabled. This PR supplies the workflows so both checks run before merge.
 

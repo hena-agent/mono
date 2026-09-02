@@ -32,7 +32,6 @@ const dependencyFields = [
   "peerDependencies",
   "overrides",
   "resolutions",
-  "catalog",
 ] as const;
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const expectedMutationConfig = {
@@ -114,14 +113,8 @@ const collectWorkflowInvocations = (
   return [...jobInvocations, ...actionInvocations];
 };
 
-const isExactDependency = (value: string): boolean => {
-  if (value === "catalog:") {
-    return true;
-  }
-  const workspaceVersion = value.startsWith("workspace:")
-    ? value.slice("workspace:".length)
-    : value;
-  if (exactVersionPattern.test(workspaceVersion)) {
+const isExactVersion = (value: string): boolean => {
+  if (exactVersionPattern.test(value)) {
     return true;
   }
   if (!value.startsWith("npm:")) {
@@ -129,6 +122,27 @@ const isExactDependency = (value: string): boolean => {
   }
   const separator = value.lastIndexOf("@");
   return separator > "npm:".length && exactVersionPattern.test(value.slice(separator + 1));
+};
+
+const isExactDependency = (value: string): boolean =>
+  value === "catalog:" ||
+  isExactVersion(value.startsWith("workspace:") ? value.slice("workspace:".length) : value);
+
+const findCatalogPinViolations = (
+  path: string,
+  catalog: Json | undefined,
+): readonly PinViolation[] => {
+  if (catalog === undefined) {
+    return [];
+  }
+  if (!isJsonObject(catalog)) {
+    throw new TypeError(`${path}: catalog must be a JSON object`);
+  }
+  return Object.entries(catalog).flatMap(([name, version]) =>
+    typeof version === "string" && isExactVersion(version)
+      ? []
+      : [{ message: `catalog.${name} must use an exact version`, path }],
+  );
 };
 
 export const findManifestPinViolations = (
@@ -157,7 +171,9 @@ export const findManifestPinViolations = (
       }
     }
   }
-  return violations;
+  return path === "package.json"
+    ? [...violations, ...findCatalogPinViolations(path, candidate["catalog"])]
+    : violations;
 };
 
 export const findWorkflowPinViolations = (

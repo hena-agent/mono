@@ -8,6 +8,7 @@
   ],
   "catalog": {
     "@effect/vitest": "4.0.0-rc.112",
+    "@vitest/coverage-v8": "4.1.11",
     "effect": "4.0.0-rc.112",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "4.1.11"
@@ -43,9 +44,9 @@
     "@ast-grep/cli": "0.45.3",
     "@stryker-mutator/core": "10.0.0",
     "@types/bun": "1.4.0",
-    "@types/node": "26.4.1",
+    "@types/node": "24.13.3",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/coverage-v8": "catalog:",
     "jscpd": "5.1.1",
     "knip": "6.34.0",
     "oxc-parser": "0.148.0",
