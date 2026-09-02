@@ -14,12 +14,12 @@
     "mutation": "stryker run"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.112"
+    "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-rc.112",
+    "@effect/vitest": "catalog:",
     "@stryker-mutator/vitest-runner": "10.0.0",
-    "@vitest/coverage-v8": "4.1.11",
-    "vitest": "4.1.11"
+    "@vitest/coverage-v8": "catalog:",
+    "vitest": "catalog:"
   }
 }
