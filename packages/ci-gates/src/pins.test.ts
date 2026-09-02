@@ -37,12 +37,14 @@ const workflowWithSteps = (steps: string): string =>
     .join("\n")}\n`;
 
 describe("findManifestPinViolations", () => {
-  it("accepts exact, prerelease, workspace, and npm alias versions", () => {
+  it("accepts exact, prerelease, workspace, catalog, and npm alias versions", () => {
     expect(
       findManifestPinViolations("package.json", {
         packageManager: "bun@1.4.0",
+        catalog: { catalog: "1.2.3" },
         dependencies: {
           alias: "npm:@scope/package@6.0.2",
+          catalog: "catalog:",
           release: "12.34.56+build.12",
           prerelease: "4.0.0-rc.112",
           workspace: "workspace:0.0.0",
@@ -68,6 +70,7 @@ describe("findManifestPinViolations", () => {
         overrides: { fifth: "latest" },
         peerDependencies: { fourth: "npm:package@>=3.0.0" },
         resolutions: { sixth: "^6.0.0" },
+        catalog: { seventh: "^7.0.0" },
       }),
     ).toEqual([
       { message: "packageManager must equal bun@1.4.0", path: "package.json" },
@@ -82,6 +85,7 @@ describe("findManifestPinViolations", () => {
       { message: "peerDependencies.fourth must use an exact version", path: "package.json" },
       { message: "overrides.fifth must use an exact version", path: "package.json" },
       { message: "resolutions.sixth must use an exact version", path: "package.json" },
+      { message: "catalog.seventh must use an exact version", path: "package.json" },
     ]);
   });
 

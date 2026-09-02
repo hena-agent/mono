@@ -32,6 +32,7 @@ const dependencyFields = [
   "peerDependencies",
   "overrides",
   "resolutions",
+  "catalog",
 ] as const;
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const expectedMutationConfig = {
@@ -114,6 +115,9 @@ const collectWorkflowInvocations = (
 };
 
 const isExactDependency = (value: string): boolean => {
+  if (value === "catalog:") {
+    return true;
+  }
   const workspaceVersion = value.startsWith("workspace:")
     ? value.slice("workspace:".length)
     : value;
