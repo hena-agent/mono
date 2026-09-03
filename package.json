@@ -63,6 +63,8 @@
   },
   "packageManager": "bun@1.4.0",
   "trustedDependencies": [
-    "@ast-grep/cli"
+    "@ast-grep/cli",
+    "@stryker-mutator/core",
+    "bun-types"
   ]
 }

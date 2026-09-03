@@ -55,6 +55,8 @@
   },
   "trustedDependencies": [
     "@ast-grep/cli",
+    "@stryker-mutator/core",
+    "bun-types",
   ],
   "catalog": {
     "@effect/vitest": "4.0.0-rc.112",

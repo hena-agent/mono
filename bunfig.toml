@@ -1,2 +1,5 @@
 [install]
-linker = "hoisted"
+linker = "isolated"
+# Work around https://github.com/oven-sh/bun/issues/36795 by keeping bun-types project-local.
+globalStore = true
+exact = true
