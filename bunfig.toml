@@ -1,2 +1,35 @@
 [install]
-linker = "hoisted"
+linker = "isolated"
+# node_modules is mostly symlinks into a machine-wide store shared across
+# worktrees (bun.com/docs/pm/global-store). Tradeoff: a linked package's
+# realpath sits outside this project, so its own upward node_modules
+# resolution can miss project-local files ("phantom dependency" fallback).
+#
+# bun-types and @stryker-mutator/core are forced project-local via root
+# trustedDependencies in package.json to route around that:
+#   - bun-types: bun#36795 -- its node:* augmentations silently resolve to
+#     `any` from the global store, hidden by tsconfig's skipLibCheck.
+#   - @stryker-mutator/core: its own runtime `import("typescript")`
+#     (never declared as a dependency) falls through to this project's
+#     hidden node_modules/.bun/node_modules/ hoist layer instead of the
+#     global store.
+# Neither package has an install/postinstall script; the trust entries
+# exist only for this project-local materialization side effect.
+#
+# That hoist layer can itself be ambiguous: this repo intentionally keeps
+# two real "typescript" packages side by side (typescript@7.0.2 via
+# @typescript/native, used for tsc; real classic typescript, reached only
+# through @typescript/typescript6's own nested "@typescript/old"
+# dependency, used by ci-gates' TS parsing and needed by stryker-core
+# above). Bun's tie-break between same-named packages in the hoist layer
+# is platform-dependent: it silently picked 7.0.2's new namespaced-export
+# build on Linux CI, crashing stryker-core with
+# `ts.parseConfigFileTextToJson is not a function` there while working on
+# macOS. Root package.json's "overrides": { "typescript": ... } pins
+# every "typescript" edge except @typescript/native's (a different
+# declared key, untouched) to the one real classic build, making the
+# hoist layer deterministic. Verified via bun.lock: the override is
+# recorded as a real, frozen-lockfile-replayed resolution, not an
+# install-time coincidence.
+globalStore = true
+exact = true

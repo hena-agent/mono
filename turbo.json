@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/turbo/schema.json",
-  "globalDependencies": ["tsconfig.base.json", "vitest.config.mjs"],
+  "globalDependencies": ["bunfig.toml", "tsconfig.base.json", "vitest.config.mjs"],
   "tasks": {
     "build": {
       "dependsOn": ["//#workspace-scripts", "^build"],

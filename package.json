@@ -62,7 +62,15 @@
     "node": ">=24"
   },
   "packageManager": "bun@1.4.0",
+  "overrides": {
+    "typescript": "6.0.3"
+  },
   "trustedDependencies": [
-    "@ast-grep/cli"
-  ]
+    "@ast-grep/cli",
+    "@stryker-mutator/core",
+    "bun-types"
+  ],
+  "patchedDependencies": {
+    "@stryker-mutator/core@10.0.0": "patches/@stryker-mutator%2Fcore@10.0.0.patch"
+  }
 }
