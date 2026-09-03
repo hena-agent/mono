@@ -58,6 +58,9 @@
     "@stryker-mutator/core",
     "bun-types",
   ],
+  "patchedDependencies": {
+    "@stryker-mutator/core@10.0.0": "patches/@stryker-mutator%2Fcore@10.0.0.patch",
+  },
   "overrides": {
     "typescript": "6.0.3",
   },

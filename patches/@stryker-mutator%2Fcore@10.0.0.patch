@@ -1,0 +1,83 @@
+diff --git a/node_modules/@stryker-mutator/core/.bun-tag-b904b53ff71a2d16 b/.bun-tag-b904b53ff71a2d16
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/src/sandbox/ts-config-preprocessor.js b/dist/src/sandbox/ts-config-preprocessor.js
+index d17257e928054c73b1e8a041564a6515430fb418..f0f09f45794fd599b35aea64391950a804e9a6db 100644
+--- a/dist/src/sandbox/ts-config-preprocessor.js
++++ b/dist/src/sandbox/ts-config-preprocessor.js
+@@ -1,4 +1,5 @@
+ import path from 'path';
++import { createRequire } from 'module';
+ import { tokens, commonTokens } from '@stryker-mutator/api/plugin';
+ /**
+  * A helper class that rewrites `references` and `extends` file paths if they end up falling outside of the sandbox.
+@@ -17,6 +18,17 @@ import { tokens, commonTokens } from '@stryker-mutator/api/plugin';
+  *   }
+  * }
+  */
++// Patched (see patches/@stryker-mutator%2Fcore@10.0.0.patch): plain
++// `import('typescript')` resolves relative to this file's own location,
++// which is ambiguous under Bun's isolated linker whenever more than one
++// real "typescript" package is installed -- see bunfig.toml. Resolve from
++// the invoking project's cwd instead, the same anchor `tryRewriteReference`
++// below already uses, so this always finds the one the project itself
++// would resolve.
++async function importTypescript() {
++    const resolved = createRequire(path.join(process.cwd(), 'package.json')).resolve('typescript');
++    return import(resolved);
++}
+ export class TSConfigPreprocessor {
+     log;
+     options;
+@@ -42,7 +54,7 @@ export class TSConfigPreprocessor {
+             const tsconfigFile = project.files.get(tsconfigFileName);
+             if (tsconfigFile) {
+                 this.log.debug('Rewriting file %s', tsconfigFile);
+-                const { default: ts } = await import('typescript');
++                const { default: ts } = await importTypescript();
+                 const { config } = ts.parseConfigFileTextToJson(tsconfigFileName, await tsconfigFile.readContent());
+                 if (config) {
+                     await this.rewriteExtends(project, config, tsconfigFileName);
+@@ -82,7 +94,7 @@ export class TSConfigPreprocessor {
+         }
+     }
+     async rewriteProjectReferences(project, config, originTSConfigFileName) {
+-        const { default: ts } = await import('typescript');
++        const { default: ts } = await importTypescript();
+         if (Array.isArray(config.references)) {
+             for (const reference of config.references) {
+                 const referencePath = ts.resolveProjectReferencePath(reference);
+diff --git a/dist/src/utils/file-utils.js b/dist/src/utils/file-utils.js
+index 67da071b8e2d1a382d35a464823c6252bb4473c4..48baede7e7f0e288771e18adbbb448e007920fa7 100644
+--- a/dist/src/utils/file-utils.js
++++ b/dist/src/utils/file-utils.js
+@@ -1,5 +1,6 @@
+ import path from 'path';
+ import fs from 'fs';
++import { createRequire } from 'module';
+ import { isErrnoException } from '@stryker-mutator/util';
+ export const fileUtils = {
+     /**
+@@ -32,9 +33,21 @@ export const fileUtils = {
+     },
+     /**
+      * Wrapper around the 'import' expression (for testability)
++     *
++     * Patched (see patches/@stryker-mutator%2Fcore@10.0.0.patch): a bare
++     * specifier (a plugin package name, e.g. "@stryker-mutator/vitest-runner")
++     * resolves relative to this file's own location by default, which is
++     * ambiguous/incomplete under Bun's isolated linker -- see bunfig.toml.
++     * Resolve bare specifiers from the invoking project's cwd instead.
++     * Absolute paths and file:// URLs (already-resolved plugin descriptors)
++     * are passed through unchanged.
+      */
+     importModule(moduleName) {
+-        return import(moduleName);
++        if (moduleName.startsWith('.') || path.isAbsolute(moduleName) || moduleName.includes('://')) {
++            return import(moduleName);
++        }
++        const resolved = createRequire(path.join(process.cwd(), 'package.json')).resolve(moduleName);
++        return import(resolved);
+     },
+     /**
+      * Recursively walks the from directory and copy the content to the target directory
