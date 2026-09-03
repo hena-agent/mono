@@ -1,5 +1,18 @@
 [install]
 linker = "isolated"
-# Work around https://github.com/oven-sh/bun/issues/36795 by keeping bun-types project-local.
+# node_modules is mostly symlinks into a machine-wide store shared across
+# worktrees (bun.com/docs/pm/global-store). Tradeoff: a linked package's
+# realpath sits outside this project, so its own upward node_modules
+# resolution can miss project-local files ("phantom dependency" fallback).
+#
+# bun-types and @stryker-mutator/core are forced project-local via root
+# trustedDependencies in package.json to route around that:
+#   - bun-types: bun#36795 -- its node:* augmentations silently resolve to
+#     `any` from the global store, hidden by tsconfig's skipLibCheck.
+#   - @stryker-mutator/core: crashes with ERR_MODULE_NOT_FOUND on its own
+#     runtime `import("typescript")`, which it never declares as a
+#     dependency.
+# Neither package has an install/postinstall script; the trust entries
+# exist only for this project-local materialization side effect.
 globalStore = true
 exact = true
