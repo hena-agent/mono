@@ -1,6 +1,6 @@
 import { RiArrowRightUpLine } from "@remixicon/react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { Link, Outlet } from "@tanstack/react-router";
+import { ClientOnly, Link, Outlet } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 
 import type { StatusCollection } from "./status.ts";
@@ -21,7 +21,9 @@ export function Shell({ collection }: { readonly collection: StatusCollection })
         <span className="edition">LOCAL / PR0</span>
       </header>
       <main>
-        <Outlet />
+        <ClientOnly>
+          <Outlet />
+        </ClientOnly>
       </main>
       <footer className="app-footer">
         <StatusView

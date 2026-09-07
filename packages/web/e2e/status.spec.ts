@@ -4,12 +4,13 @@ test("the built SPA connects to hena serve over WebSocket on desktop and mobile"
   page,
 }) => {
   const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
   const websocket = page.waitForEvent("websocket", (socket) => socket.url().endsWith("/rpc"));
   await page.goto("/");
   expect((await websocket).url()).toMatch(/\/rpc$/);
   await expect(page.getByRole("heading", { name: "A small beginning." })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Server ready");
+  expect(errors).toEqual([]);
   await page.getByRole("link", { name: "System" }).click();
   await expect(page).toHaveURL(/\/system$/);
   await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();

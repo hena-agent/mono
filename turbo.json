@@ -19,6 +19,10 @@
       "dependsOn": ["//#workspace-scripts", "^typecheck"],
       "outputs": ["reports/mutation/**"]
     },
+    "@hena-dev/web#mutation": {
+      "dependsOn": ["build", "//#workspace-scripts", "^typecheck"],
+      "outputs": ["reports/mutation/**"]
+    },
     "//#lint": {
       "inputs": [
         "$TURBO_DEFAULT$",

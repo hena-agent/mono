@@ -29,7 +29,7 @@ Use a different `--port` if the port is occupied.
 ```sh
 bun run check
 bun run mutation
-bun x --cwd packages/web playwright install chromium
+bun run --cwd packages/web playwright install chromium
 bun run e2e
 ```
 
