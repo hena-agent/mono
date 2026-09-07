@@ -22,7 +22,7 @@ const config: PlaywrightTestConfig = defineConfig({
           reuseExistingServer: false,
         }
       : {
-          command: "bun ../cli/src/main.ts serve --port 4401",
+          command: "bun ../cli/dist/main.js serve --port 4401",
           gracefulShutdown: { signal: "SIGINT", timeout: 5000 },
           url: "http://127.0.0.1:4401",
           reuseExistingServer: false,

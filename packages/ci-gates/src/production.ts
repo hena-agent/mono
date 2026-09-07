@@ -10,6 +10,7 @@ import {
 import { parseConfigFileTextToJson } from "typescript";
 
 import type { JsonCandidate } from "@hena-dev/core";
+import { webPolicy } from "./web-policy.ts";
 
 import {
   isDeclarativeRootBarrel,
@@ -73,9 +74,9 @@ const findTypeScriptConfigViolations = (
       (option) =>
         Object.hasOwn(compilerOptions, option) &&
         !(
-          path === "packages/web/tsconfig.json" &&
+          path === `${webPolicy.root}/tsconfig.json` &&
           option === "paths" &&
-          JSON.stringify(compilerOptions[option]) === '{"@/*":["./src/*"]}'
+          JSON.stringify(compilerOptions[option]) === JSON.stringify(webPolicy.paths)
         ),
     )
   ) {
@@ -97,6 +98,10 @@ export const findTypeScriptRemappingViolations = (
 
 const escapesPackageSource = (path: string, sourceRoot: string, specifier: string): boolean => {
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  if (sourceRoot === `${webPolicy.root}/src` && normalizedSpecifier.startsWith("@/")) {
+    const target = posix.normalize(posix.join(sourceRoot, normalizedSpecifier.slice(2)));
+    return target !== sourceRoot && !target.startsWith(`${sourceRoot}/`);
+  }
   if (!relativePathPattern.test(normalizedSpecifier)) return false;
   const target = posix.normalize(posix.join(posix.dirname(path), normalizedSpecifier));
   return target !== sourceRoot && !target.startsWith(`${sourceRoot}/`);

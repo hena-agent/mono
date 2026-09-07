@@ -1,19 +1,12 @@
-import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRouteWithContext } from "@tanstack/react-router";
-import { useEffect, useMemo, type ReactElement } from "react";
+import type { ReactElement } from "react";
 
 import { Document } from "../document.tsx";
 import { NotFound } from "../pages.tsx";
 import { Shell } from "../shell.tsx";
-import type { StatusCollection } from "../status.ts";
-import type { createClient } from "../rpc-client.ts";
+import type { WebContext } from "../web-context.ts";
 import appCss from "../styles.css?url";
-
-export interface WebContext {
-  readonly queryClient: QueryClient;
-  readonly collection: StatusCollection;
-  readonly runtime: ReturnType<typeof createClient>;
-}
 
 export const Route = createRootRouteWithContext<WebContext>()({
   head: () => ({
@@ -30,25 +23,7 @@ export const Route = createRootRouteWithContext<WebContext>()({
 });
 
 function Root(): ReactElement {
-  const { queryClient, collection, runtime } = Route.useRouteContext();
-  const resources = useMemo(
-    () => ({ queryClient, collection, runtime, users: 0 }),
-    [queryClient, collection, runtime],
-  );
-  useEffect(() => {
-    resources.users += 1;
-    return () => {
-      resources.users -= 1;
-      // StrictMode remounts effects synchronously; defer disposal until the last consumer is gone.
-      queueMicrotask(() => {
-        if (resources.users === 0) {
-          void resources.collection.cleanup();
-          resources.queryClient.clear();
-          void resources.runtime.dispose();
-        }
-      });
-    };
-  }, [resources]);
+  const { queryClient, collection } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
       <Shell collection={collection} />

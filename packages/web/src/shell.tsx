@@ -7,7 +7,7 @@ import type { StatusCollection } from "./status.ts";
 import { StatusView } from "./status-view.tsx";
 
 export function Shell({ collection }: { readonly collection: StatusCollection }): ReactElement {
-  const { data } = useLiveQuery({ query: (q) => q.from({ connection: collection }) });
+  const { data } = useLiveQuery(collection);
   return (
     <div className="app-shell">
       <header className="app-header">

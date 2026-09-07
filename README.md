@@ -35,7 +35,8 @@ bun run e2e
 
 Playwright starts the actual CLI with the built SPA on port 4401 and checks both
 desktop and mobile. It verifies WebSocket status, navigation, deep-link reload,
-and browser errors. The same scenario runs in CI. For the dev-server path:
+and browser errors. It also disconnects/reconnects the RPC WebSocket without a
+page reload. The same scenarios run in CI. For the dev-server path:
 
 ```sh
 HENA_E2E_DEV=1 bun run --cwd packages/web e2e
@@ -59,6 +60,15 @@ generated file is excluded from handwritten-code gates. The web app does not
 emit library declarations, so `isolatedDeclarations` is disabled only there;
 strict type checking remains enabled. The shared Vitest config is also used by
 web mutation tests, without Start's build-time route transforms.
+
+The router-context factory owns the Query client, collection, and managed Effect
+runtime. Its idempotent `dispose()` cancels requests and tears down resources in
+order; Vite invokes it on module replacement. React subscribes directly to the
+status collection without creating a derived query, and route remounts do not
+dispose shared services. Queries stay disabled during server rendering.
+Status requests cross from Effect into Query once: socket
+failures produce an unavailable status, while defects and protocol errors remain
+Query errors with diagnostics.
 
 ## Delivery
 

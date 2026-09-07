@@ -1,8 +1,9 @@
-import type { ServerStatus } from "@hena-dev/rpc";
-import { createCollection, type Collection } from "@tanstack/db";
+import { createCollection, type Collection, type NonSingleResult } from "@tanstack/db";
 import { queryCollectionOptions, type QueryCollectionUtils } from "@tanstack/query-db-collection";
 import type { QueryClient } from "@tanstack/react-query";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, type ManagedRuntime } from "effect";
+
+import { Client } from "./rpc-client.ts";
 
 export const Connection: Schema.Struct<{
   readonly id: Schema.Literal<"server">;
@@ -16,11 +17,15 @@ export type StatusCollection = Collection<
   Connection,
   "server",
   QueryCollectionUtils<Connection, "server">
->;
+> &
+  NonSingleResult;
 
-export const createStatusCollection = <E>(
+const unavailable = (): Effect.Effect<Connection[]> =>
+  Effect.succeed([{ id: "server", status: "unavailable" }]);
+
+export const createStatusCollection = (
   queryClient: QueryClient,
-  read: Effect.Effect<ServerStatus, E>,
+  runtime: ManagedRuntime.ManagedRuntime<Client, never>,
 ): StatusCollection =>
   createCollection(
     queryCollectionOptions({
@@ -30,12 +35,16 @@ export const createStatusCollection = <E>(
       schema: Schema.toStandardSchemaV1(Connection),
       getKey: (row) => row.id,
       startSync: false,
+      retry: false,
       queryFn: ({ signal }) =>
-        Effect.runPromise(
-          read.pipe(
-            Effect.match({
-              onSuccess: (status): Connection[] => [status],
-              onFailure: (): Connection[] => [{ id: "server", status: "unavailable" }],
+        runtime.runPromise(
+          Client.use((client) => client["server.status"]()).pipe(
+            Effect.map((status): Connection[] => [status]),
+            Effect.catchReasons("RpcClientError", {
+              SocketOpenError: unavailable,
+              SocketReadError: unavailable,
+              SocketWriteError: unavailable,
+              SocketCloseError: unavailable,
             }),
           ),
           { signal },

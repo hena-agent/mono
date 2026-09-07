@@ -2,9 +2,10 @@ import { BunHttpServer } from "@effect/platform-bun";
 import { routes } from "@hena-dev/server";
 import { Effect, Layer, Path, type PlatformError, type Scope } from "effect";
 import { HttpRouter } from "effect/unstable/http";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import type { ChildProcessSpawner } from "effect/unstable/process";
 
 import type { ServeOptions } from "./command.ts";
+import { openBrowser } from "./open-browser.ts";
 
 export const serve: (
   options: ServeOptions,
@@ -29,12 +30,7 @@ export const serve: (
   yield* Layer.build(server);
   yield* Effect.logInfo(`Workspace: ${path.resolve(options.cwd)}`);
   if (options.open) {
-    const url = `http://${options.host}:${options.port}`;
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const command = process.platform === "darwin" ? "open" : "xdg-open";
-    yield* spawner
-      .exitCode(ChildProcess.make(command, [url]))
-      .pipe(Effect.catch(() => Effect.logWarning(`Open ${url} in your browser.`)));
+    yield* openBrowser(`http://${options.host}:${options.port}`);
   }
   return yield* Effect.never;
 }, Effect.scoped);

@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isJson, isJsonObject, type Json, type JsonCandidate } from "@hena-dev/core";
 
 import { listGitFiles } from "./files.ts";
+import { webPolicy } from "./web-policy.ts";
 
 export interface WorkspaceManifest {
   readonly exports: Json | undefined;
@@ -167,8 +168,8 @@ export const findWorkspaceScriptViolations = (
           ([script, expected]) =>
             [
               script,
-              manifest.path === "packages/web/package.json" && script === "build"
-                ? "vite build"
+              manifest.path === `${webPolicy.root}/package.json` && script === "build"
+                ? webPolicy.build
                 : expected,
             ] as const,
         )

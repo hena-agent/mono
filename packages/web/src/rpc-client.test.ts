@@ -13,6 +13,7 @@ it("uses the same origin and the correct websocket protocol", () => {
 
 it.live("opens a schema-validated NDJSON websocket and disposes the client", () =>
   Effect.gen(function* () {
+    expect(Client.key).toBe("@hena-dev/web/Client");
     yield* Layer.build(HttpRouter.serve(routes("/unused")));
     const server = yield* HttpServer.HttpServer;
     const address = server.address as HttpServer.TcpAddress;
@@ -22,7 +23,6 @@ it.live("opens a schema-validated NDJSON websocket and disposes the client", () 
       runtime.runPromise(Client.use((client) => client["server.status"]())),
     );
     expect(response).toEqual({ id: "server", status: "ready" });
-    expect(Client.key).toBe("@hena-dev/web/Client");
     yield* Effect.promise(() => runtime.dispose());
   }).pipe(Effect.provide(NodeHttpServer.layerTest), Effect.scoped),
 );

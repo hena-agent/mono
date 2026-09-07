@@ -11,6 +11,7 @@ import {
 import { parseDocument } from "yaml";
 
 import { listGitFiles } from "./files.ts";
+import { webPolicy } from "./web-policy.ts";
 
 export interface PinFileAccess {
   readonly listManifestPaths: (cwd: string) => readonly string[];
@@ -232,10 +233,10 @@ export const findMutationConfigPinViolations = (
     throw new TypeError(`${path}: Stryker config must be a JSON object`);
   }
   const expected =
-    path === "packages/web/stryker.config.json"
+    path === `${webPolicy.root}/stryker.config.json`
       ? {
           ...expectedMutationConfig,
-          mutate: [...expectedMutationConfig.mutate, "!src/routeTree.gen.ts"],
+          mutate: [...expectedMutationConfig.mutate, `!${webPolicy.generatedRoute}`],
         }
       : expectedMutationConfig;
   return canonicalStringify(candidate) === canonicalStringify(expected)
