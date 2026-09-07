@@ -10,6 +10,7 @@ export default {
         "dist/**",
         "src/**/*.test.{ts,tsx,mts,cts}",
         "src/**/*.test-d.{ts,tsx,mts,cts}",
+        "**/packages/web/src/routeTree.gen.ts",
       ],
       thresholds: {
         branches: 100,

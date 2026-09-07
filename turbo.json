@@ -2,6 +2,8 @@
   "$schema": "./node_modules/turbo/schema.json",
   "globalDependencies": ["tsconfig.base.json", "vitest.config.mjs"],
   "tasks": {
+    "dev": { "cache": false, "persistent": true, "env": ["HENA_FAKE_MODEL"] },
+    "e2e": { "dependsOn": ["build", "@hena-dev/cli#build"], "cache": false, "outputs": ["test-results/**", "playwright-report/**"] },
     "build": {
       "dependsOn": ["//#workspace-scripts", "^build"],
       "outputs": ["dist/**"]

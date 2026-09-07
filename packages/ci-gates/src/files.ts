@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 import { parseSync } from "oxc-parser";
 
 const gitExecutable = "/usr/bin/git";
-const generatedTypeScriptPaths = new Set([".opencode/plugin/codex-web-search.ts"]);
+const generatedTypeScriptPaths = new Set([
+  ".opencode/plugin/codex-web-search.ts",
+  "packages/web/src/routeTree.gen.ts",
+]);
 const rootSourceBarrelPattern = /^(?:packages\/[^/]+\/)?src\/index\.(?:ts|tsx|mts|cts)$/u;
 
 export interface SourceFile {

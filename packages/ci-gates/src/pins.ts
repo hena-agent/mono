@@ -58,6 +58,7 @@ const expectedVitestConfig = `export default {
         "dist/**",
         "src/**/*.test.{ts,tsx,mts,cts}",
         "src/**/*.test-d.{ts,tsx,mts,cts}",
+        "**/packages/web/src/routeTree.gen.ts",
       ],
       thresholds: {
         branches: 100,
@@ -230,7 +231,14 @@ export const findMutationConfigPinViolations = (
   if (!isJson(candidate) || !isJsonObject(candidate)) {
     throw new TypeError(`${path}: Stryker config must be a JSON object`);
   }
-  return canonicalStringify(candidate) === canonicalStringify(expectedMutationConfig)
+  const expected =
+    path === "packages/web/stryker.config.json"
+      ? {
+          ...expectedMutationConfig,
+          mutate: [...expectedMutationConfig.mutate, "!src/routeTree.gen.ts"],
+        }
+      : expectedMutationConfig;
+  return canonicalStringify(candidate) === canonicalStringify(expected)
     ? []
     : [{ message: "Stryker must mutate all production source at 100% thresholds", path }];
 };

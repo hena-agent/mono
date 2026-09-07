@@ -7,3 +7,6 @@ reports/
 *.tsbuildinfo
 *.log
 .DS_Store
+**/.tanstack/
+**/test-results/
+**/playwright-report/

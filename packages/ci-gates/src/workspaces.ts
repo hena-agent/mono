@@ -163,6 +163,15 @@ export const findWorkspaceScriptViolations = (
     .sort((left, right) => left.path.localeCompare(right.path))
     .flatMap((manifest) =>
       requiredScripts
+        .map(
+          ([script, expected]) =>
+            [
+              script,
+              manifest.path === "packages/web/package.json" && script === "build"
+                ? "vite build"
+                : expected,
+            ] as const,
+        )
         .filter(([script, expected]) => manifest.scripts?.[script] !== expected)
         .map(([script, expected]) => ({ expected, path: manifest.path, script })),
     );

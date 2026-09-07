@@ -12,6 +12,9 @@
     "max-lines": ["error", { "max": 499, "skipBlankLines": false, "skipComments": false }],
     "typescript/no-explicit-any": "error"
   },
+  "overrides": [
+    { "files": ["packages/web/src/routeTree.gen.ts"], "rules": { "typescript/no-explicit-any": "off", "eslint/no-unused-vars": "off", "eslint/no-underscore-dangle": "off" } }
+  ],
   "ignorePatterns": [
     "node_modules/**",
     "dist/**",

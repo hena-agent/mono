@@ -1,0 +1,28 @@
+{
+  "name": "@hena-dev/cli",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "bin": { "hena": "./src/main.ts" },
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root . --config ../../vitest.config.mjs --coverage",
+    "mutation": "stryker run",
+    "dev": "bun --watch src/main.ts serve --cwd ../.."
+  },
+  "dependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@hena-dev/server": "workspace:0.0.0",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "catalog:",
+    "vitest": "catalog:"
+  }
+}

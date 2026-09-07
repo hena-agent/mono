@@ -15,6 +15,7 @@
     "**/reports/**",
     "**/.turbo/**",
     "**/.stryker-tmp/**",
-    ".opencode/plugin/codex-web-search.ts"
+    ".opencode/plugin/codex-web-search.ts",
+    "packages/web/src/routeTree.gen.ts"
   ]
 }

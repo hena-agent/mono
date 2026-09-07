@@ -69,7 +69,15 @@ const findTypeScriptConfigViolations = (
   const violations: ProductionScopeViolation[] = [];
   if (
     isCandidateObject(compilerOptions) &&
-    remappingOptions.some((option) => Object.hasOwn(compilerOptions, option))
+    remappingOptions.some(
+      (option) =>
+        Object.hasOwn(compilerOptions, option) &&
+        !(
+          path === "packages/web/tsconfig.json" &&
+          option === "paths" &&
+          JSON.stringify(compilerOptions[option]) === '{"@/*":["./src/*"]}'
+        ),
+    )
   ) {
     violations.push({
       message: "TypeScript baseUrl/paths/rootDirs/moduleSuffixes remapping is not permitted",
