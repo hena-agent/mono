@@ -66,7 +66,7 @@ runs:
             >/dev/null
         }
 
-        if ! validate_auth "$PROVIDER" false; then
+        if [ "$PROVIDER" != "opencode" ] && ! validate_auth "$PROVIDER" false; then
           echo "::error::OPENCODE_AUTH_JSON must contain a valid '$PROVIDER' API key or non-refreshing OAuth credential with at least $((TIMEOUT_MINUTES + HEADROOM_MINUTES))m remaining."
           exit 1
         fi
