@@ -11,6 +11,7 @@ import {
 import { parseDocument } from "yaml";
 
 import { listGitFiles } from "./files.ts";
+import { webPolicy } from "./web-policy.ts";
 
 export interface PinFileAccess {
   readonly listManifestPaths: (cwd: string) => readonly string[];
@@ -58,6 +59,7 @@ const expectedVitestConfig = `export default {
         "dist/**",
         "src/**/*.test.{ts,tsx,mts,cts}",
         "src/**/*.test-d.{ts,tsx,mts,cts}",
+        "**/packages/web/src/routeTree.gen.ts",
       ],
       thresholds: {
         branches: 100,
@@ -230,7 +232,14 @@ export const findMutationConfigPinViolations = (
   if (!isJson(candidate) || !isJsonObject(candidate)) {
     throw new TypeError(`${path}: Stryker config must be a JSON object`);
   }
-  return canonicalStringify(candidate) === canonicalStringify(expectedMutationConfig)
+  const expected =
+    path === `${webPolicy.root}/stryker.config.json`
+      ? {
+          ...expectedMutationConfig,
+          mutate: [...expectedMutationConfig.mutate, `!${webPolicy.generatedRoute}`],
+        }
+      : expectedMutationConfig;
+  return canonicalStringify(candidate) === canonicalStringify(expected)
     ? []
     : [{ message: "Stryker must mutate all production source at 100% thresholds", path }];
 };

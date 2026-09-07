@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
-  execFileSync: vi.fn(() => "src/live.ts\0.opencode/plugin/codex-web-search.ts\0"),
+  execFileSync: vi.fn(
+    () => "src/live.ts\0.opencode/plugin/codex-web-search.ts\0packages/web/src/routeTree.gen.ts\0",
+  ),
   spawnSync: vi.fn(() => ({ status: 1, stdout: "" })),
 }));
 
@@ -60,7 +62,11 @@ it("discovers requested Git paths", () => {
     ],
     { cwd: "/repo", encoding: "utf8" },
   );
-  expect(listGitFiles("/repo")).toEqual(["src/live.ts", ".opencode/plugin/codex-web-search.ts"]);
+  expect(listGitFiles("/repo")).toEqual([
+    "src/live.ts",
+    ".opencode/plugin/codex-web-search.ts",
+    "packages/web/src/routeTree.gen.ts",
+  ]);
 });
 
 it("classifies only declarative package-root barrels", () => {

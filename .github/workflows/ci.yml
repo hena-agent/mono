@@ -35,6 +35,9 @@ jobs:
             turbo-${{ runner.os }}-main-
       - run: bun run check
       - run: bun run summary
+      - run: bun x playwright install --with-deps chromium
+        working-directory: packages/web
+      - run: bun run e2e
 
   mutation:
     name: mutation

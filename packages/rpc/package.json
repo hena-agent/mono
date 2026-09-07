@@ -1,0 +1,21 @@
+{
+  "name": "@hena-dev/rpc",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root . --config ../../vitest.config.mjs --coverage",
+    "mutation": "stryker run"
+  },
+  "dependencies": { "effect": "catalog:" },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isJson, isJsonObject, type Json, type JsonCandidate } from "@hena-dev/core";
 
 import { listGitFiles } from "./files.ts";
+import { webPolicy } from "./web-policy.ts";
 
 export interface WorkspaceManifest {
   readonly exports: Json | undefined;
@@ -163,6 +164,15 @@ export const findWorkspaceScriptViolations = (
     .sort((left, right) => left.path.localeCompare(right.path))
     .flatMap((manifest) =>
       requiredScripts
+        .map(
+          ([script, expected]) =>
+            [
+              script,
+              manifest.path === `${webPolicy.root}/package.json` && script === "build"
+                ? webPolicy.build
+                : expected,
+            ] as const,
+        )
         .filter(([script, expected]) => manifest.scripts?.[script] !== expected)
         .map(([script, expected]) => ({ expected, path: manifest.path, script })),
     );

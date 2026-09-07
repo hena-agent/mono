@@ -12,6 +12,7 @@
     "**/dist/**",
     "**/node_modules/**",
     "**/reports/**",
+    "packages/web/**",
     ".opencode/plugin/codex-web-search.ts"
   ]
 }

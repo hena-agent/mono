@@ -3,9 +3,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { parseSync } from "oxc-parser";
+import { webPolicy } from "./web-policy.ts";
 
 const gitExecutable = "/usr/bin/git";
-const generatedTypeScriptPaths = new Set([".opencode/plugin/codex-web-search.ts"]);
+const generatedTypeScriptPaths = new Set([
+  ".opencode/plugin/codex-web-search.ts",
+  `${webPolicy.root}/${webPolicy.generatedRoute}`,
+]);
 const rootSourceBarrelPattern = /^(?:packages\/[^/]+\/)?src\/index\.(?:ts|tsx|mts|cts)$/u;
 
 export interface SourceFile {

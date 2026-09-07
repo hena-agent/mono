@@ -10,6 +10,7 @@ import {
 import { parseConfigFileTextToJson } from "typescript";
 
 import type { JsonCandidate } from "@hena-dev/core";
+import { webPolicy } from "./web-policy.ts";
 
 import {
   isDeclarativeRootBarrel,
@@ -69,7 +70,15 @@ const findTypeScriptConfigViolations = (
   const violations: ProductionScopeViolation[] = [];
   if (
     isCandidateObject(compilerOptions) &&
-    remappingOptions.some((option) => Object.hasOwn(compilerOptions, option))
+    remappingOptions.some(
+      (option) =>
+        Object.hasOwn(compilerOptions, option) &&
+        !(
+          path === `${webPolicy.root}/tsconfig.json` &&
+          option === "paths" &&
+          JSON.stringify(compilerOptions[option]) === JSON.stringify(webPolicy.paths)
+        ),
+    )
   ) {
     violations.push({
       message: "TypeScript baseUrl/paths/rootDirs/moduleSuffixes remapping is not permitted",
@@ -89,6 +98,10 @@ export const findTypeScriptRemappingViolations = (
 
 const escapesPackageSource = (path: string, sourceRoot: string, specifier: string): boolean => {
   const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  if (sourceRoot === `${webPolicy.root}/src` && normalizedSpecifier.startsWith("@/")) {
+    const target = posix.normalize(posix.join(sourceRoot, normalizedSpecifier.slice(2)));
+    return target !== sourceRoot && !target.startsWith(`${sourceRoot}/`);
+  }
   if (!relativePathPattern.test(normalizedSpecifier)) return false;
   const target = posix.normalize(posix.join(posix.dirname(path), normalizedSpecifier));
   return target !== sourceRoot && !target.startsWith(`${sourceRoot}/`);
